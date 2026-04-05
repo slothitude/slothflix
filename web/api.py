@@ -211,14 +211,15 @@ def poster(title):
     except Exception:
         pass
 
-    # Return default poster image (sloth logo)
+    # Return default poster image (sloth logo, downscaled)
     for candidate in [
         os.path.join(os.path.dirname(__file__), "static", "poster_default.png"),
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "sloth_logo.png"),
     ]:
         if os.path.exists(candidate):
             with open(candidate, "rb") as f:
-                return Response(f.read(), mimetype="image/png")
+                blob = _downscale_poster(f.read())
+            return Response(blob, mimetype="image/jpeg")
     return "", 404
 
 
