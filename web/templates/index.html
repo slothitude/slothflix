@@ -326,8 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function dismissSplash() {
   const splash = document.getElementById('splash');
+  if (!splash) return;
   splash.classList.add('fade-out');
-  setTimeout(() => splash.remove(), 700);
+  setTimeout(() => { if (splash.parentNode) splash.remove(); }, 700);
 }
 
 // --- IP Check ---
