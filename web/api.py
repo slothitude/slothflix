@@ -455,11 +455,19 @@ def vimm_download(game_id):
     referer = f"https://vimm.net/vault/{game_id}"
 
     # Use emulatorjs container (not VPN-routed) to download via docker exec
+    # emulatorjs mounts rom-data at /data, slothflix mounts it at /data/roms
+    emu_dir = f"/data/{system}"
+    emu_filepath = f"{emu_dir}/{filename}"
     try:
+        # Create directory in emulatorjs container
+        subprocess.run(
+            ["docker", "exec", "emulatorjs", "mkdir", "-p", emu_dir],
+            capture_output=True, text=True, timeout=10,
+        )
         result = subprocess.run(
             [
                 "docker", "exec", "emulatorjs",
-                "wget", "-qO", filepath,
+                "wget", "-qO", emu_filepath,
                 "--header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "--header", f"Referer: {referer}",
                 "--timeout=120",
