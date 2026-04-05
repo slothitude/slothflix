@@ -39,6 +39,8 @@ services:
       - DOWNLOAD_DIR=/downloads
       - CACHE_DB_PATH=/app/data/cache.db
       - FLASK_PORT=8180
+      - AUTH_USER=admin
+      - AUTH_PASS=slothflix
     restart: unless-stopped
 
   searxng:
