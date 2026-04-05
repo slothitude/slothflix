@@ -115,9 +115,10 @@ a{color:inherit;text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Play Ready Overlay */
-.play-ready-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:305;display:none;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;background:rgba(0,0,0,.3)}
-.play-btn-big{width:80px;height:80px;border-radius:50%;background:rgba(229,9,20,.85);display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff;transition:transform .2s,background .2s}
+.play-ready-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:305;display:none;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;background:rgba(0,0,0,.55)}
+.play-btn-big{width:80px;height:80px;border-radius:50%;background:rgba(229,9,20,.85);display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff;transition:transform .2s,background .2s;animation:pulse 2s ease-in-out infinite}
 .play-btn-big:hover{transform:scale(1.1);background:rgba(244,6,18,.95)}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 .play-ready-title{margin-top:16px;font-size:18px;color:#fff;text-shadow:1px 1px 4px rgba(0,0,0,.8);max-width:500px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Next Episode */
@@ -143,6 +144,37 @@ a{color:inherit;text-decoration:none}
 
 .manage-link{display:inline-block;margin-left:12px;font-size:12px;color:#888;text-decoration:underline;cursor:pointer}
 .manage-link:hover{color:#ccc}
+
+/* Vimm Library Browser */
+.library-bar{display:flex;align-items:center;gap:12px;padding:0 40px;margin-bottom:8px;flex-wrap:wrap}
+.library-bar select,.library-bar button{padding:6px 12px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;cursor:pointer}
+.library-bar select:focus,.library-bar button:focus{outline:none;border-color:#e50914}
+.library-bar button{background:#e50914;border-color:#e50914;font-weight:600}
+.library-bar button:hover{background:#f40612}
+.library-bar button:disabled{opacity:.5;cursor:not-allowed}
+.letter-bar{display:flex;gap:2px;padding:0 40px;margin-bottom:12px;flex-wrap:wrap}
+.letter-bar span{padding:4px 8px;font-size:12px;color:#888;cursor:pointer;border-radius:3px;transition:background .2s,color .2s}
+.letter-bar span:hover{color:#fff;background:#333}
+.letter-bar span.active{color:#fff;background:#e50914}
+.vimm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;padding:0 40px 40px}
+.vimm-card{background:#222;border-radius:6px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative}
+.vimm-card:hover{transform:scale(1.05);box-shadow:0 8px 24px rgba(0,0,0,.6)}
+.vimm-card img{width:100%;height:220px;object-fit:cover;background:#1a1a2e}
+.vimm-card .vimm-title{padding:8px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vimm-card .vimm-meta{padding:0 8px 8px;font-size:10px;color:#888;display:flex;justify-content:space-between}
+.vimm-card .vimm-rating{color:#46d369}
+.vimm-card .dl-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.vimm-card:hover .dl-overlay{display:flex}
+.vimm-card .dl-overlay .btn-sm{padding:6px 16px;border-radius:4px;border:none;font-size:12px;font-weight:600;cursor:pointer}
+.vimm-card .dl-overlay .btn-dl{background:#e50914;color:#fff}
+.vimm-card .dl-overlay .btn-dl:hover{background:#f40612}
+.vimm-card .dl-overlay .btn-dl:disabled{opacity:.5;cursor:not-allowed}
+.vimm-card .dl-overlay .btn-installed{background:#46d369;color:#000}
+.lib-loading{text-align:center;padding:40px;color:#888}
+.tab-sub{display:flex;align-items:center;gap:16px;padding:12px 40px 0}
+.tab-sub-btn{padding:6px 16px;font-size:13px;color:#aaa;cursor:pointer;border-radius:4px;border:none;background:none;transition:background .2s,color .2s}
+.tab-sub-btn:hover{color:#fff}
+.tab-sub-btn.active{background:#e50914;color:#fff}
 
 /* Responsive */
 @media(max-width:768px){
@@ -532,6 +564,8 @@ function closePlayer() {
   document.getElementById('playReadyOverlay').style.display = 'none';
 }
 
+const MAX_RETRIES = 3;
+
 async function playItem(item, fileId) {
   closeDetail();
   currentFileId = fileId !== undefined ? fileId : null;
@@ -552,47 +586,58 @@ async function playItem(item, fileId) {
   // Start trailer pre-roll immediately
   startTrailerPreRoll();
 
-  try {
-    const body = {magnet: item.magnet};
-    if (fileId !== undefined) body.file_id = fileId;
+  let lastError = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt > 1) {
+        status.textContent = `Retrying (${attempt}/${MAX_RETRIES})...`;
+        // Stop any previous stream before retrying
+        try { await authFetch(API + '/api/stream/stop', {method: 'POST'}); } catch(e) {}
+        await new Promise(r => setTimeout(r, 2000));
+      }
 
-    const r = await authFetch(API + '/api/stream/start', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body)
-    });
-    const d = await r.json();
+      const body = {magnet: item.magnet};
+      if (fileId !== undefined) body.file_id = fileId;
 
-    if (d.error) {
-      status.textContent = 'Error: ' + d.error;
-      stopTrailerPreRoll();
-      return;
+      const r = await authFetch(API + '/api/stream/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      const d = await r.json();
+
+      if (d.error) throw new Error(d.error);
+
+      currentSessionId = d.session_id;
+
+      // Start polling status
+      if (streamPollInterval) clearInterval(streamPollInterval);
+      streamPollInterval = setInterval(pollStatus, 2000);
+
+      // Poll until buffer >= 10%
+      status.textContent = attempt > 1 ? `Buffering (attempt ${attempt})...` : 'Buffering...';
+      await waitForBuffer(d.session_id);
+
+      // If trailer still playing, show play button overlay and wait
+      if (trailerActive) {
+        loading.classList.add('hidden');
+        document.getElementById('dlStats').style.display = 'none';
+        document.getElementById('dlProgressWrap').style.display = 'none';
+        showPlayReadyOverlay();
+        return;
+      }
+
+      startPlayback();
+      return; // success
+    } catch(e) {
+      lastError = e;
+      console.warn(`Play attempt ${attempt} failed:`, e.message);
     }
-
-    currentSessionId = d.session_id;
-
-    // Start polling status
-    if (streamPollInterval) clearInterval(streamPollInterval);
-    streamPollInterval = setInterval(pollStatus, 2000);
-
-    // Poll until buffer >= 5%
-    status.textContent = 'Buffering...';
-    await waitForBuffer(d.session_id);
-
-    // If trailer still playing, show play button overlay and wait
-    if (trailerActive) {
-      loading.classList.add('hidden');
-      document.getElementById('dlStats').style.display = 'none';
-      document.getElementById('dlProgressWrap').style.display = 'none';
-      showPlayReadyOverlay();
-      return;
-    }
-
-    startPlayback();
-  } catch(e) {
-    status.textContent = 'Error: ' + e.message;
-    stopTrailerPreRoll();
   }
+
+  // All retries exhausted
+  status.textContent = `Failed after ${MAX_RETRIES} attempts: ${lastError ? lastError.message : 'unknown error'}`;
+  stopTrailerPreRoll();
 }
 
 function showPlayReadyOverlay() {
@@ -621,6 +666,9 @@ function startPlayback() {
 }
 
 // --- Trailer Pre-Roll (YouTube IFrame Player API) ---
+window.addEventListener('message', (e) => {
+  if (e.origin === 'https://www.youtube.com') e.stopPropagation();
+}, true);
 function loadYTApi() {
   if (!ytApiReady) {
     ytApiReady = new Promise(resolve => {
@@ -716,18 +764,20 @@ function stopTrailerPreRoll() {
   if (trailerDoneResolve) { trailerDoneResolve(); trailerDoneResolve = null; }
 }
 
-async function waitForBuffer(sessionId) {
+async function waitForBuffer(sessionId, timeoutMs = 120000) {
   const dlStats = document.getElementById('dlStats');
   const dlProgressWrap = document.getElementById('dlProgressWrap');
   dlStats.style.display = 'flex';
   dlProgressWrap.style.display = 'block';
+  const deadline = Date.now() + timeoutMs;
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const check = async () => {
       try {
+        if (Date.now() > deadline) { reject(new Error('Buffering timed out')); return; }
         const r = await authFetch(API + '/api/stream/status');
         const d = await r.json();
-        if (!d.active) { resolve(); return; }
+        if (!d.active) { reject(new Error('Stream ended unexpectedly')); return; }
         updateStreamUI(null, d.progress, d.download_rate, d.seeds);
 
         const pct = d.progress || 0;
@@ -746,7 +796,7 @@ async function waitForBuffer(sessionId) {
           setTimeout(check, 1500);
         }
       } catch(e) {
-        setTimeout(check, 1500);
+        reject(e);
       }
     };
     setTimeout(check, 1000);
@@ -896,45 +946,68 @@ const SYSTEM_ICONS = {
   fds: '\uD83C\uDFAE', saturn: '\uD83C\uDFAE',
 };
 
+let gameSubTab = 'myroms'; // 'myroms' or 'library'
+let installedRoms = {}; // system -> Set of filenames (lowercase)
+let vimmSystem = 'NES';
+let vimmLetter = 'S';
+
+function setGameSubTab(tab) {
+  gameSubTab = tab;
+  document.querySelectorAll('.tab-sub-btn').forEach(b => b.classList.toggle('active', b.dataset.sub === tab));
+  if (tab === 'myroms') loadMyRoms();
+  else loadVimmBrowse();
+}
+
 async function loadGameCatalog() {
   const container = document.getElementById('catalogRows');
-  container.innerHTML = '<div class="row-section"><h2 class="row-title">Loading games...</h2></div>';
+  // Add sub-tab bar
+  container.innerHTML = `<div class="tab-sub">
+    <button class="tab-sub-btn active" data-sub="myroms" onclick="setGameSubTab('myroms')">My ROMs</button>
+    <button class="tab-sub-btn" data-sub="library" onclick="setGameSubTab('library')">ROM Library</button>
+    <span class="manage-link" onclick="window.open('/emu/','_blank')">Manage ROMs</span>
+  </div><div id="gameContent"></div>`;
+  await loadMyRoms();
+  dismissSplash();
+}
+
+async function loadMyRoms() {
+  const content = document.getElementById('gameContent');
+  if (!content) return;
+  content.innerHTML = '<div class="lib-loading">Loading...</div>';
   try {
     const r = await authFetch(API + '/api/games');
     const d = await r.json();
-    container.innerHTML = '';
+    content.innerHTML = '';
     const systems = d.systems || {};
+    // Build installed roms set for library badges
+    installedRoms = {};
     const keys = Object.keys(systems);
     if (!keys.length) {
-      container.innerHTML = `<div class="row-section">
-        <h2 class="row-title">No ROMs found</h2>
-        <p style="color:#888;margin-top:8px">Upload ROMs via the <a href="/emu/" target="_blank" style="color:#e50914">EmulatorJS management UI</a></p>
+      content.innerHTML = `<div class="row-section">
+        <h2 class="row-title">No ROMs installed</h2>
+        <p style="color:#888;margin-top:8px">Browse the <span style="color:#e50914;cursor:pointer" onclick="setGameSubTab('library')">ROM Library</span> to download games</p>
       </div>`;
       return;
     }
     for (const sys of keys) {
       const info = systems[sys];
       const icon = SYSTEM_ICONS[sys] || '\uD83C\uDFAE';
+      installedRoms[sys] = new Set(info.roms.map(r => r.filename.toLowerCase()));
       renderGameRow(`${info.display_name} (${info.count})`, info.roms, sys, icon);
     }
-    // Manage ROMs link
-    const manageSection = document.createElement('div');
-    manageSection.className = 'row-section';
-    manageSection.innerHTML = '<span class="manage-link" onclick="window.open(\'/emu/\',\'_blank\')">Manage ROMs</span>';
-    container.appendChild(manageSection);
   } catch(e) {
-    container.innerHTML = `<div class="row-section"><h2 class="row-title">Error loading games</h2></div>`;
+    content.innerHTML = '<div class="row-section"><h2 class="row-title">Error loading games</h2></div>';
   }
-  dismissSplash();
 }
 
 function renderGameRow(title, roms, system, icon) {
   if (!roms || !roms.length) return;
-  const container = document.getElementById('catalogRows');
+  const content = document.getElementById('gameContent');
+  if (!content) return;
   const section = document.createElement('div');
   section.className = 'row-section';
   section.innerHTML = `<h2 class="row-title">${esc(title)}</h2><div class="row-wrap"><div class="row-scroll"></div></div>`;
-  container.appendChild(section);
+  content.appendChild(section);
   const row = section.querySelector('.row-scroll');
   roms.forEach(rom => {
     const card = document.createElement('div');
@@ -950,6 +1023,107 @@ function renderGameRow(title, roms, system, icon) {
     card.onclick = () => launchGame({core: system, system, filename: rom.filename, title: name});
     row.appendChild(card);
   });
+}
+
+// --- Vimm Library Browser ---
+const VIMM_SYSTEMS = [
+  {value:'NES',label:'Nintendo'},{value:'SNES',label:'Super Nintendo'},
+  {value:'GBA',label:'Game Boy Advance'},{value:'GBC',label:'Game Boy Color'},
+  {value:'N64',label:'Nintendo 64'},{value:'PS1',label:'PlayStation'},
+  {value:'Genesis',label:'Genesis'},{value:'DS',label:'Nintendo DS'},
+  {value:'SMS',label:'Master System'},{value:'GG',label:'Game Gear'},
+  {value:'Atari2600',label:'Atari 2600'},{value:'Atari7800',label:'Atari 7800'},
+  {value:'Saturn',label:'Saturn'},{value:'32X',label:'32X'},
+  {value:'Lynx',label:'Lynx'},{value:'TG16',label:'TurboGrafx-16'},
+];
+const VIMM_TO_SYS = {'NES':'nes','SNES':'snes','GBA':'gba','GBC':'gbc','N64':'n64','PS1':'psx','Genesis':'segamd','DS':'nds','SMS':'ms','GG':'gg','Atari2600':'atari2600','Atari7800':'atari7800','Saturn':'saturn','32X':'32x','Lynx':'lynx','TG16':'pce'};
+
+async function loadVimmBrowse() {
+  const content = document.getElementById('gameContent');
+  if (!content) return;
+  // Render system picker + letter bar + grid
+  const sysOpts = VIMM_SYSTEMS.map(s => `<option value="${s.value}"${s.value===vimmSystem?' selected':''}>${s.label}</option>`).join('');
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(l => `<span class="${l===vimmLetter?'active':''}" onclick="vimmBrowseLetter('${l}')">${l}</span>`).join('');
+
+  content.innerHTML = `
+    <div class="library-bar">
+      <select id="vimmSystem" onchange="vimmSystem=this.value;loadVimmGrid()">${sysOpts}</select>
+      <button onclick="loadVimmGrid()">Browse</button>
+      <span style="color:#888;font-size:12px">Powered by vimm.net</span>
+    </div>
+    <div class="letter-bar" id="vimmLetterBar">${letters}</div>
+    <div id="vimmGrid"></div>`;
+
+  await loadVimmGrid();
+}
+
+function vimmBrowseLetter(l) {
+  vimmLetter = l;
+  document.querySelectorAll('#vimmLetterBar span').forEach(s => s.classList.toggle('active', s.textContent === l));
+  loadVimmGrid();
+}
+
+async function loadVimmGrid() {
+  const grid = document.getElementById('vimmGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="lib-loading">Loading...</div>';
+  try {
+    const r = await authFetch(`${API}/api/vimm/browse?system=${vimmSystem}&letter=${vimmLetter}`);
+    const d = await r.json();
+    const games = d.games || [];
+    if (!games.length) {
+      grid.innerHTML = '<div class="lib-loading">No games found for this letter.</div>';
+      return;
+    }
+    grid.innerHTML = '<div class="vimm-grid" id="vimmGridInner"></div>';
+    const inner = document.getElementById('vimmGridInner');
+    games.forEach(g => {
+      const card = document.createElement('div');
+      card.className = 'vimm-card';
+      const sysKey = VIMM_TO_SYS[vimmSystem] || vimmSystem.toLowerCase();
+      const isInstalled = installedRoms[sysKey] && installedRoms[sysKey].has(g.title.toLowerCase() + '.' + (vimmSystem==='NES'?'nes':vimmSystem==='SNES'?'sfc':'nes'));
+      card.innerHTML = `
+        <img src="${API}/api/vimm/cover/${g.id}" alt="" loading="lazy" onerror="this.style.display='none'">
+        <div class="vimm-title" title="${esc(g.title)}">${esc(g.title)}</div>
+        <div class="vimm-meta">
+          <span class="vimm-rating">${g.rating || ''}</span>
+          <span>${vimmSystem}</span>
+        </div>
+        <div class="dl-overlay">
+          ${isInstalled ? '<button class="btn-sm btn-installed">Installed</button>' : `<button class="btn-sm btn-dl" onclick="event.stopPropagation();downloadVimmRom(${g.id},'${esc(g.title)}',${g.media_id || 0})">Download</button>`}
+        </div>`;
+      card.onclick = () => {
+        // If installed, launch; otherwise show download overlay
+      };
+      inner.appendChild(card);
+    });
+  } catch(e) {
+    grid.innerHTML = '<div class="lib-loading">Error loading library</div>';
+  }
+}
+
+async function downloadVimmRom(gameId, title, mediaId) {
+  const sysKey = VIMM_TO_SYS[vimmSystem] || vimmSystem.toLowerCase();
+  const btn = document.querySelector(`.vimm-card .btn-dl[onclick*="${gameId}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Downloading...'; }
+  try {
+    const r = await authFetch(`${API}/api/vimm/download/${gameId}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({media_id: mediaId || null, system: sysKey}),
+    });
+    const d = await r.json();
+    if (d.error) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Failed'; }
+      return;
+    }
+    // Mark as installed
+    if (!installedRoms[sysKey]) installedRoms[sysKey] = new Set();
+    installedRoms[sysKey].add(d.filename.toLowerCase());
+    if (btn) { btn.textContent = 'Installed'; btn.className = 'btn-sm btn-installed'; btn.disabled = true; }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Error'; }
+  }
 }
 
 // --- Game Player ---

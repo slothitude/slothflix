@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request, Response, send_file
 import search
 import cache
 import torrent
+import vimm
 
 log = logging.getLogger(__name__)
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -386,3 +387,70 @@ def catalog_games():
         return jsonify(results)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# --- Vimm.net ROM library integration ---
+
+@api_bp.route("/vimm/browse")
+def vimm_browse():
+    """Browse vimm.net game catalog by system and letter."""
+    system = request.args.get("system", "NES")
+    letter = request.args.get("letter", "A").upper()
+    if len(letter) != 1 or not letter.isalpha():
+        letter = "A"
+    games = vimm.browse(system, letter)
+    return jsonify({"games": games, "system": system, "letter": letter})
+
+
+@api_bp.route("/vimm/info/<int:game_id>")
+def vimm_info(game_id):
+    """Get detailed info for a vimm.net game."""
+    info = vimm.get_game_info(game_id)
+    if not info:
+        return jsonify({"error": "Game not found"}), 404
+    return jsonify(info)
+
+
+@api_bp.route("/vimm/download/<int:game_id>", methods=["POST"])
+def vimm_download(game_id):
+    """Download a ROM from vimm.net and save to the ROM directory."""
+    data = request.get_json(force=True, silent=True) or {}
+    media_id = data.get("media_id")
+
+    # Get game info if media_id not provided
+    if not media_id:
+        info = vimm.get_game_info(game_id)
+        if not info or not info.get("media_id"):
+            return jsonify({"error": "Could not determine media ID"}), 400
+        media_id = info["media_id"]
+
+    # Determine system directory
+    system = data.get("system", "nes")
+    dest_dir = os.path.join(ROM_BASE_DIR, system)
+
+    filepath = vimm.download_rom(game_id, media_id, dest_dir)
+    if not filepath:
+        return jsonify({"error": "Download failed"}), 500
+
+    return jsonify({
+        "status": "ok",
+        "path": filepath,
+        "filename": os.path.basename(filepath),
+        "system": system,
+    })
+
+
+@api_bp.route("/vimm/cover/<int:game_id>")
+def vimm_cover_proxy(game_id):
+    """Proxy cover art from vimm.net."""
+    try:
+        import requests as req
+        resp = req.get(
+            f"https://dl.vimm.net/image.php?type=box&id={game_id}",
+            timeout=10,
+        )
+        if resp.status_code != 200 or len(resp.content) < 100:
+            return "", 404
+        return Response(resp.content, mimetype="image/jpeg")
+    except Exception:
+        return "", 404
