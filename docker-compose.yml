@@ -83,9 +83,8 @@ services:
     restart: unless-stopped
 
   emulatorjs:
-    image: linuxserver/emulatorjs:latest
+    image: lsiodev/emulatorjs:latest
     container_name: emulatorjs
-    platform: linux/arm64
     environment:
       - PUID=1000
       - PGID=1000
