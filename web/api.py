@@ -4,7 +4,7 @@ import os
 import threading
 import logging
 
-from flask import Blueprint, jsonify, request, Response
+from flask import Blueprint, jsonify, request, Response, send_file
 
 import search
 import cache
@@ -15,7 +15,48 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 # Background refresh state
 _refresh_lock = threading.Lock()
-_catalog_refreshing = {"movies": False, "tv": False}
+_catalog_refreshing = {"movies": False, "tv": False, "games": False}
+
+# ROM scanning config
+ROM_BASE_DIR = os.getenv("ROM_DIR", "/data/roms")
+
+SYSTEM_CORE_MAP = {
+    "nes": "nes", "snes": "snes", "gba": "gba", "gbc": "gbc",
+    "n64": "n64", "psx": "psx", "segamd": "segaMD", "atari2600": "atari2600",
+    "nds": "nds", "vb": "vb", "ms": "ms", "gg": "gg",
+    "snes-msu1": "snes", "segacd": "segaCD", "32x": "sega32x",
+    "atari7800": "atari7800", "lynx": "lynx", "pcfx": "pcfx",
+    "ngp": "ngp", "ws": "ws", "coleco": "coleco",
+    "pce": "pce", "fds": "fds", "saturn": "saturn",
+}
+
+ROM_EXTENSIONS = {
+    ".nes", ".fds", ".unf", ".unif",
+    ".smc", ".sfc", ".fig", ".bs",
+    ".gba", ".gbc", ".gb", ".dmg",
+    ".z64", ".n64", ".v64",
+    ".bin", ".iso", ".img", ".cue", ".chd",
+    ".smd", ".gen", ".md",
+    ".a26", ".a78", ".lnx",
+    ".nds",
+    ".ws", ".wsc",
+    ".ngp", ".ngc",
+    ".pce", ".sgx",
+    ".col",
+    ".sat",
+    ".32x",
+}
+
+_SYSTEM_DISPLAY = {
+    "nes": "Nintendo (NES)", "snes": "Super Nintendo", "gba": "Game Boy Advance",
+    "gbc": "Game Boy Color", "n64": "Nintendo 64", "psx": "PlayStation",
+    "segamd": "Sega Genesis", "atari2600": "Atari 2600", "nds": "Nintendo DS",
+    "snes-msu1": "SNES MSU-1", "segacd": "Sega CD", "32x": "Sega 32X",
+    "atari7800": "Atari 7800", "lynx": "Atari Lynx", "pcfx": "PC-FX",
+    "ngp": "Neo Geo Pocket", "ws": "WonderSwan", "coleco": "ColecoVision",
+    "pce": "PC Engine", "fds": "Famicom Disk", "saturn": "Sega Saturn",
+    "ms": "Master System", "gg": "Game Gear", "vb": "Virtual Boy",
+}
 
 
 def _background_refresh(category, fetch_fn, cache_key):
@@ -263,3 +304,85 @@ def check_ip():
         return jsonify(resp.json())
     except Exception as e:
         return jsonify({"ip": "unknown", "error": str(e)})
+
+
+@api_bp.route("/games")
+def games():
+    """Scan ROM directories and return available games grouped by system."""
+    systems = {}
+    rom_dir = ROM_BASE_DIR
+    if not os.path.isdir(rom_dir):
+        return jsonify({"systems": systems})
+
+    for system_dir in sorted(os.listdir(rom_dir)):
+        sys_path = os.path.join(rom_dir, system_dir)
+        if not os.path.isdir(sys_path):
+            continue
+        core = SYSTEM_CORE_MAP.get(system_dir)
+        if not core:
+            continue
+        roms = []
+        for fname in sorted(os.listdir(sys_path)):
+            _, ext = os.path.splitext(fname)
+            if ext.lower() not in ROM_EXTENSIONS:
+                continue
+            fpath = os.path.join(sys_path, fname)
+            try:
+                size = os.path.getsize(fpath)
+            except OSError:
+                size = 0
+            roms.append({
+                "filename": fname,
+                "size": size,
+                "system": system_dir,
+            })
+        if roms:
+            systems[system_dir] = {
+                "core": core,
+                "display_name": _SYSTEM_DISPLAY.get(system_dir, system_dir),
+                "count": len(roms),
+                "roms": roms,
+            }
+
+    return jsonify({"systems": systems})
+
+
+@api_bp.route("/games/rom/<system>/<path:filename>")
+def serve_rom(system, filename):
+    """Serve a ROM file with path traversal protection."""
+    # Validate system name
+    if "/" in system or "\\" in system or ".." in system:
+        return jsonify({"error": "Invalid system"}), 400
+
+    full_path = os.path.normpath(os.path.join(ROM_BASE_DIR, system, filename))
+    if not full_path.startswith(os.path.normpath(ROM_BASE_DIR)):
+        return jsonify({"error": "Invalid path"}), 400
+
+    _, ext = os.path.splitext(filename)
+    if ext.lower() not in ROM_EXTENSIONS:
+        return jsonify({"error": "Invalid file type"}), 400
+
+    if not os.path.isfile(full_path):
+        return jsonify({"error": "File not found"}), 404
+
+    return send_file(full_path)
+
+
+@api_bp.route("/catalog/games")
+def catalog_games():
+    """Top 100 game torrents (cached, background refresh)."""
+    cached = cache.load_catalog("games")
+    if cached:
+        threading.Thread(
+            target=_background_refresh,
+            args=("games", search.fetch_top_games, "games"),
+            daemon=True,
+        ).start()
+        return jsonify(cached)
+
+    try:
+        results = search.fetch_top_games()
+        cache.save_catalog("games", results)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

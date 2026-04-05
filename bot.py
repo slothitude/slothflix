@@ -1,4 +1,4 @@
-"""Telegram bot for SlothFlix token management."""
+"""Telegram bot for SlothFlix token management and game commands."""
 
 import os
 import secrets
@@ -101,6 +101,128 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"Denied @{username} (ID: {uid}).")
 
 
+# --- Game commands ---
+
+ROM_DIR = os.getenv("ROM_DIR", "/data/roms")
+
+_SYSTEM_DISPLAY = {
+    "nes": "NES", "snes": "SNES", "gba": "GBA", "gbc": "GBC",
+    "n64": "N64", "psx": "PSX", "segamd": "Genesis", "atari2600": "Atari 2600",
+    "nds": "DS", "ms": "Master System", "gg": "Game Gear",
+}
+
+
+def _scan_roms():
+    """Scan ROM directory and return {system: [roms]}."""
+    systems = {}
+    if not os.path.isdir(ROM_DIR):
+        return systems
+    for sys_dir in sorted(os.listdir(ROM_DIR)):
+        sys_path = os.path.join(ROM_DIR, sys_dir)
+        if not os.path.isdir(sys_path):
+            continue
+        roms = []
+        for f in sorted(os.listdir(sys_path)):
+            if os.path.isfile(os.path.join(sys_path, f)):
+                roms.append(f)
+        if roms:
+            systems[sys_dir] = roms
+    return systems
+
+
+async def games_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """List available game systems and ROM counts."""
+    systems = _scan_roms()
+    if not systems:
+        await update.message.reply_text(
+            "No ROMs found.\n\n"
+            f"Upload ROMs at {APP_URL}/emu/"
+        )
+        return
+
+    lines = ["Available Games:"]
+    total = 0
+    for sys_name, roms in systems.items():
+        display = _SYSTEM_DISPLAY.get(sys_name, sys_name.upper())
+        lines.append(f"  {display} - {len(roms)} ROMs")
+        total += len(roms)
+    lines.append(f"\nTotal: {total} games")
+    lines.append(f"\nUpload more at {APP_URL}/emu/")
+
+    await update.message.reply_text("\n".join(lines))
+
+
+async def game_search_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Search for a specific ROM by name."""
+    if not context.args:
+        await update.message.reply_text("Usage: /game <search term>")
+        return
+
+    query = " ".join(context.args).lower()
+    systems = _scan_roms()
+    matches = []
+
+    for sys_name, roms in systems.items():
+        for rom in roms:
+            if query in rom.lower():
+                size = 0
+                try:
+                    size = os.path.getsize(os.path.join(ROM_DIR, sys_name, rom))
+                except OSError:
+                    pass
+                display = _SYSTEM_DISPLAY.get(sys_name, sys_name.upper())
+                size_str = f"{size / 1024:.0f} KB" if size < 1024 * 1024 else f"{size / (1024 * 1024):.1f} MB"
+                matches.append((rom, sys_name, display, size_str))
+
+    if not matches:
+        await update.message.reply_text(f"No games found matching '{query}'")
+        return
+
+    lines = [f"Found {len(matches)} match(es):"]
+    for rom, sys_name, display, size_str in matches[:10]:
+        from urllib.parse import quote
+        url = f"{APP_URL}/?game={sys_name}:{quote(rom)}"
+        lines.append(f"  {rom.replace('.', ' ', 1).rsplit('.', 1)[0]} ({display}, {size_str})\n  Play: {url}")
+
+    await update.message.reply_text("\n".join(lines))
+
+
+async def netplay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Generate netplay instructions for a game."""
+    if not context.args:
+        await update.message.reply_text("Usage: /netplay <game name>")
+        return
+
+    query = " ".join(context.args).lower()
+    systems = _scan_roms()
+    match = None
+
+    for sys_name, roms in systems.items():
+        for rom in roms:
+            if query in rom.lower():
+                match = (rom, sys_name)
+                break
+        if match:
+            break
+
+    if not match:
+        await update.message.reply_text(f"No game found matching '{query}'")
+        return
+
+    rom, sys_name = match
+    from urllib.parse import quote
+    name = rom.rsplit(".", 1)[0]
+    url = f"{APP_URL}/?game={sys_name}:{quote(rom)}"
+
+    await update.message.reply_text(
+        f'Netplay Room for "{name}"\n\n'
+        f"1. Open: {url}\n"
+        "2. Click the netplay button in the emulator\n"
+        "3. Create a room and share the code here\n\n"
+        "Share this message with friends!"
+    )
+
+
 def main():
     if not BOT_TOKEN:
         print("TELEGRAM_BOT_TOKEN not set, bot disabled.")
@@ -110,6 +232,9 @@ def main():
     app.add_handler(CommandHandler("request", request_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
     app.add_handler(CommandHandler("revoke", revoke_cmd))
+    app.add_handler(CommandHandler("games", games_cmd))
+    app.add_handler(CommandHandler("game", game_search_cmd))
+    app.add_handler(CommandHandler("netplay", netplay_cmd))
     app.add_handler(CallbackQueryHandler(callback_handler))
     print("Telegram bot started.")
     app.run_polling()

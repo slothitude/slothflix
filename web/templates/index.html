@@ -13,6 +13,10 @@ a{color:inherit;text-decoration:none}
 .nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;padding:12px 40px;background:linear-gradient(180deg,rgba(20,20,20,.95),transparent);transition:background .3s}
 .nav.scrolled{background:rgba(20,20,20,.98)}
 .logo{font-size:28px;font-weight:900;color:#e50914;letter-spacing:-1px;margin-right:40px}
+.nav-tabs{display:flex;gap:0;margin-right:24px}
+.nav-tab{padding:6px 16px;font-size:14px;color:#aaa;cursor:pointer;border-bottom:3px solid transparent;transition:color .2s,border .2s}
+.nav-tab:hover{color:#fff}
+.nav-tab.active{color:#fff;border-bottom-color:#e50914}
 .search-box{flex:1;max-width:400px;position:relative}
 .search-box input{width:100%;padding:8px 16px 8px 40px;border:1px solid #444;border-radius:4px;background:rgba(0,0,0,.7);color:#fff;font-size:14px;outline:none;transition:border .2s}
 .search-box input:focus{border-color:#e50914}
@@ -122,6 +126,24 @@ a{color:inherit;text-decoration:none}
 .next-ep-countdown{font-size:24px;font-weight:700;color:#e5e5e5;margin-bottom:16px}
 .next-ep-buttons{display:flex;gap:12px;justify-content:center}
 
+/* Game Overlay */
+.game-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:300;display:none;align-items:center;justify-content:center}
+.game-overlay.open{display:flex}
+.game-overlay .game-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:36px;cursor:pointer;z-index:301;opacity:.7;transition:opacity .2s}
+.game-overlay .game-close:hover{opacity:1}
+#gameContainer{width:100%;height:100%}
+
+/* Game Cards */
+.game-card{min-width:180px;max-width:180px;border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative;flex-shrink:0;background:#222}
+.game-card:hover{transform:scale(1.08);z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+.game-card .game-icon{width:100%;height:200px;display:flex;align-items:center;justify-content:center;font-size:48px;background:linear-gradient(135deg,#1a1a2e,#16213e)}
+.game-card .game-title{padding:8px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#1a1a1a}
+.game-card .game-meta{padding:0 8px 8px;font-size:10px;color:#888;display:flex;justify-content:space-between;align-items:center}
+.game-card .system-badge{background:#e5091433;color:#e50914;padding:1px 6px;border-radius:3px;font-size:9px}
+
+.manage-link{display:inline-block;margin-left:12px;font-size:12px;color:#888;text-decoration:underline;cursor:pointer}
+.manage-link:hover{color:#ccc}
+
 /* Responsive */
 @media(max-width:768px){
   .nav{padding:10px 16px}
@@ -145,6 +167,10 @@ a{color:inherit;text-decoration:none}
 <!-- Nav -->
 <nav class="nav" id="nav">
   <div class="logo">SLOTHFLIX</div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-tab="movies" onclick="switchTab('movies')">Movies &amp; TV</div>
+    <div class="nav-tab" data-tab="games" onclick="switchTab('games')">Games</div>
+  </div>
   <div class="search-box">
     <span class="icon">&#128269;</span>
     <input type="text" id="searchInput" placeholder="Search movies, TV shows..." autocomplete="off">
@@ -201,6 +227,12 @@ a{color:inherit;text-decoration:none}
 
 <!-- Catalog rows -->
 <div id="catalogRows"></div>
+
+<!-- Game Player Overlay -->
+<div class="game-overlay" id="gameOverlay">
+  <button class="game-close" onclick="closeGame()">&times;</button>
+  <div id="gameContainer"></div>
+</div>
 
 <!-- Detail overlay -->
 <div class="overlay" id="overlay" onclick="closeDetail()"></div>
@@ -831,6 +863,151 @@ function fmtSize(bytes) {
   }
   return bytes.toFixed(1) + ' PB';
 }
+
+// --- Tab switching ---
+let currentTab = 'movies';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  const hero = document.getElementById('hero');
+  const container = document.getElementById('catalogRows');
+  container.innerHTML = '';
+  if (tab === 'movies') {
+    hero.style.display = '';
+    loadCatalog();
+  } else {
+    hero.style.display = 'none';
+    loadGameCatalog();
+  }
+}
+
+// --- Game Catalog ---
+const SYSTEM_ICONS = {
+  nes: '\uD83C\uDFAE', snes: '\uD83C\uDFAE', gba: '\uD83D\uDD79', gbc: '\uD83D\uDD79',
+  n64: '\uD83C\uDFAE', psx: '\uD83C\uDFAE', segamd: '\uD83C\uDFAE',
+  atari2600: '\uD83D\uDDAE', nds: '\uD83D\uDD79', vb: '\uD83C\uDFAE',
+  ms: '\uD83C\uDFAE', gg: '\uD83D\uDD79', 'snes-msu1': '\uD83C\uDFAE',
+  segacd: '\uD83C\uDFAE', '32x': '\uD83C\uDFAE', atari7800: '\uD83D\uDDAE',
+  lynx: '\uD83D\uDD79', pcfx: '\uD83C\uDFAE', ngp: '\uD83D\uDD79',
+  ws: '\uD83D\uDD79', coleco: '\uD83D\uDDAE', pce: '\uD83C\uDFAE',
+  fds: '\uD83C\uDFAE', saturn: '\uD83C\uDFAE',
+};
+
+async function loadGameCatalog() {
+  const container = document.getElementById('catalogRows');
+  container.innerHTML = '<div class="row-section"><h2 class="row-title">Loading games...</h2></div>';
+  try {
+    const r = await authFetch(API + '/api/games');
+    const d = await r.json();
+    container.innerHTML = '';
+    const systems = d.systems || {};
+    const keys = Object.keys(systems);
+    if (!keys.length) {
+      container.innerHTML = `<div class="row-section">
+        <h2 class="row-title">No ROMs found</h2>
+        <p style="color:#888;margin-top:8px">Upload ROMs via the <a href="/emu/" target="_blank" style="color:#e50914">EmulatorJS management UI</a></p>
+      </div>`;
+      return;
+    }
+    for (const sys of keys) {
+      const info = systems[sys];
+      const icon = SYSTEM_ICONS[sys] || '\uD83C\uDFAE';
+      renderGameRow(`${info.display_name} (${info.count})`, info.roms, sys, icon);
+    }
+    // Manage ROMs link
+    const manageSection = document.createElement('div');
+    manageSection.className = 'row-section';
+    manageSection.innerHTML = '<span class="manage-link" onclick="window.open(\'/emu/\',\'_blank\')">Manage ROMs</span>';
+    container.appendChild(manageSection);
+  } catch(e) {
+    container.innerHTML = `<div class="row-section"><h2 class="row-title">Error loading games</h2></div>`;
+  }
+  dismissSplash();
+}
+
+function renderGameRow(title, roms, system, icon) {
+  if (!roms || !roms.length) return;
+  const container = document.getElementById('catalogRows');
+  const section = document.createElement('div');
+  section.className = 'row-section';
+  section.innerHTML = `<h2 class="row-title">${esc(title)}</h2><div class="row-wrap"><div class="row-scroll"></div></div>`;
+  container.appendChild(section);
+  const row = section.querySelector('.row-scroll');
+  roms.forEach(rom => {
+    const card = document.createElement('div');
+    card.className = 'game-card';
+    const name = rom.filename.replace(/\.[^.]+$/, '');
+    card.innerHTML = `
+      <div class="game-icon">${icon}</div>
+      <div class="game-title" title="${esc(name)}">${esc(name)}</div>
+      <div class="game-meta">
+        <span>${fmtSize(rom.size)}</span>
+        <span class="system-badge">${esc(system.toUpperCase())}</span>
+      </div>`;
+    card.onclick = () => launchGame({core: system, system, filename: rom.filename, title: name});
+    row.appendChild(card);
+  });
+}
+
+// --- Game Player ---
+function launchGame(item) {
+  const overlay = document.getElementById('gameOverlay');
+  const container = document.getElementById('gameContainer');
+  container.innerHTML = '';
+
+  // Set EmulatorJS globals
+  window.EJS_player = '#gameContainer';
+  window.EJS_core = item.core;
+  window.EJS_gameUrl = `${location.origin}/api/games/rom/${encodeURIComponent(item.system)}/${encodeURIComponent(item.filename)}`;
+  window.EJS_gameName = item.title;
+  window.EJS_backgroundColor = '#000';
+  window.EJS_netplayEnabled = true;
+  window.EJS_netplayServer = 'wss://netplay.emulatorjs.com';
+
+  // Load EmulatorJS loader
+  const script = document.createElement('script');
+  script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+  script.onerror = () => {
+    container.innerHTML = '<p style="color:#e50914;padding:40px;text-align:center">Failed to load EmulatorJS. Check your internet connection.</p>';
+  };
+  container.appendChild(script);
+  overlay.classList.add('open');
+}
+
+function closeGame() {
+  const overlay = document.getElementById('gameOverlay');
+  const container = document.getElementById('gameContainer');
+  container.innerHTML = '';
+  overlay.classList.remove('open');
+  // Clean up EJS globals
+  delete window.EJS_player;
+  delete window.EJS_core;
+  delete window.EJS_gameUrl;
+  delete window.EJS_gameName;
+  delete window.EJS_backgroundColor;
+  delete window.EJS_netplayEnabled;
+  delete window.EJS_netplayServer;
+}
+
+// --- Deep-link: ?game=system:filename ---
+document.addEventListener('DOMContentLoaded', () => {
+  const gameParam = new URLSearchParams(location.search).get('game');
+  if (gameParam && gameParam.includes(':')) {
+    const idx = gameParam.indexOf(':');
+    const system = gameParam.substring(0, idx);
+    const filename = gameParam.substring(idx + 1);
+    const title = filename.replace(/\.[^.]+$/, '');
+    const core = system; // same mapping handled server-side
+    switchTab('games');
+    // Slight delay to let tab switch settle
+    setTimeout(() => {
+      launchGame({core, system, filename, title});
+    }, 100);
+  }
+});
 </script>
 </body>
 </html>

@@ -119,6 +119,11 @@ def fetch_top_tv():
     return fetch_top(205)
 
 
+def fetch_top_games():
+    """Fetch top game torrents (TPB category 400)."""
+    return fetch_top(400)
+
+
 def search(query):
     """Search for torrents across multiple providers."""
     results = []

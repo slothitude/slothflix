@@ -57,6 +57,7 @@ services:
     volumes:
       - downloads:/downloads
       - cache-data:/app/data
+      - rom-data:/data/roms:ro
     environment:
       - TRANSMISSION_HOST=127.0.0.1
       - TRANSMISSION_PORT=9191
@@ -64,6 +65,7 @@ services:
       - DOWNLOAD_DIR=/downloads
       - CACHE_DB_PATH=/app/data/cache.db
       - FLASK_PORT=8180
+      - ROM_DIR=/data/roms
       - AUTH_USER=admin
       - AUTH_PASS=slothflix
       - TELEGRAM_BOT_TOKEN=8463691096:AAFSzCOSlI2yOc8Lyb7fby8zY0RJQwSyagQ
@@ -80,6 +82,26 @@ services:
       - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
     restart: unless-stopped
 
+  emulatorjs:
+    image: lscr.io/linuxserver/emulatorjs:latest
+    container_name: emulatorjs
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - SUBFOLDER=/emu/
+    volumes:
+      - rom-data:/data
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.emu.rule=PathPrefix(`/emu`)"
+      - "traefik.http.routers.emu.entrypoints=websecure"
+      - "traefik.http.routers.emu.tls=true"
+      - "traefik.http.services.emu.loadbalancer.server.port=3000"
+      - "traefik.http.routers.emu.service=emu"
+
 volumes:
   downloads:
   cache-data:
+  rom-data:
