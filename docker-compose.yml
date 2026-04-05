@@ -57,7 +57,8 @@ services:
     volumes:
       - downloads:/downloads
       - cache-data:/app/data
-      - rom-data:/data/roms:ro
+      - rom-data:/data/roms
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - TRANSMISSION_HOST=127.0.0.1
       - TRANSMISSION_PORT=9191

@@ -454,20 +454,22 @@ def vimm_download(game_id):
     dl_url = f"https://dl3.vimm.net/?mediaId={media_id}"
     referer = f"https://vimm.net/vault/{game_id}"
 
+    # Use emulatorjs container (not VPN-routed) to download via docker exec
     try:
         result = subprocess.run(
             [
-                "curl", "-sL", "-o", filepath, "-w", "%{http_code}",
+                "docker", "exec", "emulatorjs",
+                "wget", "-qO", filepath,
+                "--header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "--header", f"Referer: {referer}",
+                "--timeout=120",
                 dl_url,
-                "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "-H", f"Referer: {referer}",
-                "--max-time", "120",
             ],
             capture_output=True, text=True, timeout=130,
         )
-        http_code = result.stdout.strip() if result.stdout else ""
-        if http_code == "200" and os.path.isfile(filepath) and os.path.getsize(filepath) > 100:
-            log.info(f"Downloaded {filename} via host curl ({os.path.getsize(filepath)} bytes)")
+        if (result.returncode == 0 and os.path.isfile(filepath)
+                and os.path.getsize(filepath) > 100):
+            log.info(f"Downloaded {filename} via emulatorjs ({os.path.getsize(filepath)} bytes)")
             return jsonify({
                 "status": "ok",
                 "path": filepath,
@@ -475,12 +477,11 @@ def vimm_download(game_id):
                 "system": system,
             })
         else:
-            log.error(f"Host curl download failed: HTTP {http_code}")
-            # Cleanup failed download
+            log.error(f"Emulatorjs download failed: rc={result.returncode} stderr={result.stderr[:200]}")
             if os.path.isfile(filepath):
                 os.remove(filepath)
     except Exception as e:
-        log.error(f"Host curl download error: {e}")
+        log.error(f"Emulatorjs download error: {e}")
 
     # Fallback: try through VPN (might work for some regions)
     filepath = vimm.download_rom(game_id, media_id, dest_dir, filename)
