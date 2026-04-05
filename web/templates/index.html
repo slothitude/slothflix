@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SlothFlix</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#141414;color:#e5e5e5;font-family:'Segoe UI',Helvetica,Arial,sans-serif;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+
+/* Nav */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;padding:12px 40px;background:linear-gradient(180deg,rgba(20,20,20,.95),transparent);transition:background .3s}
+.nav.scrolled{background:rgba(20,20,20,.98)}
+.logo{font-size:28px;font-weight:900;color:#e50914;letter-spacing:-1px;margin-right:40px}
+.search-box{flex:1;max-width:400px;position:relative}
+.search-box input{width:100%;padding:8px 16px 8px 40px;border:1px solid #444;border-radius:4px;background:rgba(0,0,0,.7);color:#fff;font-size:14px;outline:none;transition:border .2s}
+.search-box input:focus{border-color:#e50914}
+.search-box .icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#888}
+.ip-badge{margin-left:auto;font-size:12px;color:#46d369;padding:4px 12px;border:1px solid #46d36933;border-radius:4px;cursor:pointer}
+.ip-badge:hover{background:#46d36922}
+
+/* Hero */
+.hero{height:70vh;display:flex;align-items:end;padding:0 40px 60px;background:linear-gradient(0deg,#141414 0%,transparent 50%),linear-gradient(90deg,#141414 60%,transparent),radial-gradient(ellipse at 70% 30%,#1a2a3a 0%,#141414 70%)}
+.hero-info{max-width:500px}
+.hero-info h1{font-size:48px;font-weight:700;margin-bottom:12px;text-shadow:2px 2px 8px rgba(0,0,0,.8)}
+.hero-info p{font-size:16px;color:#aaa;line-height:1.5;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border-radius:4px;font-size:16px;font-weight:600;cursor:pointer;border:none;transition:background .2s}
+.btn-play{background:#e50914;color:#fff}
+.btn-play:hover{background:#f40612}
+.btn-queue{background:rgba(109,109,110,.7);color:#fff;margin-left:10px}
+.btn-queue:hover{background:rgba(109,109,110,.5)}
+
+/* Rows */
+.row-section{padding:20px 40px}
+.row-title{font-size:20px;font-weight:600;margin-bottom:12px;color:#e5e5e5}
+.row-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;scroll-behavior:smooth;-ms-overflow-style:none;scrollbar-width:none}
+.row-scroll::-webkit-scrollbar{display:none}
+.row-scroll .scroll-btn{position:absolute;top:0;bottom:12px;width:40px;background:rgba(20,20,20,.7);border:none;color:#fff;font-size:24px;cursor:pointer;z-index:2;display:flex;align-items:center;justify-content:center}
+.row-wrap{position:relative}
+
+/* Cards */
+.card{min-width:180px;max-width:180px;border-radius:4px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative;flex-shrink:0}
+.card:hover{transform:scale(1.08);z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.6)}
+.card img{width:100%;height:250px;object-fit:cover;background:#222}
+.card-title{padding:8px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#1a1a1a}
+.card-meta{padding:0 8px 8px;font-size:10px;color:#888;display:flex;justify-content:space-between}
+.card .seed-badge{color:#46d369}
+.card-placeholder{width:100%;height:250px;background:linear-gradient(135deg,#1a1a1a,#2a2a2a);display:flex;align-items:center;justify-content:center;font-size:36px;color:#333}
+
+/* Detail Panel */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:200;opacity:0;pointer-events:none;transition:opacity .3s}
+.overlay.open{opacity:1;pointer-events:auto}
+.detail-panel{position:fixed;top:0;right:-600px;width:600px;max-width:100vw;height:100vh;background:#181818;z-index:201;overflow-y:auto;transition:right .3s;box-shadow:-4px 0 24px rgba(0,0,0,.5)}
+.detail-panel.open{right:0}
+.detail-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;z-index:5}
+.detail-poster{width:100%;height:350px;object-fit:cover;background:#222}
+.detail-body{padding:24px}
+.detail-body h2{font-size:28px;margin-bottom:8px}
+.detail-meta{display:flex;gap:16px;margin:12px 0;color:#aaa;font-size:14px}
+.detail-meta .green{color:#46d369}
+.detail-desc{font-size:14px;color:#ccc;line-height:1.6;margin:16px 0}
+
+/* Episode Picker */
+.episode-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:16px}
+.ep-card{background:#222;border-radius:4px;padding:12px;cursor:pointer;transition:background .2s;border:2px solid transparent}
+.ep-card:hover{background:#2a2a2a}
+.ep-card.selected{border-color:#e50914}
+.ep-card .ep-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ep-card .ep-size{font-size:11px;color:#888;margin-top:4px}
+
+/* Stream status */
+.stream-bar{position:fixed;bottom:0;left:0;right:0;background:#181818;padding:12px 40px;display:flex;align-items:center;gap:16px;z-index:150;transform:translateY(100%);transition:transform .3s}
+.stream-bar.open{transform:translateY(0)}
+.stream-bar .progress{flex:1;height:4px;background:#333;border-radius:2px;overflow:hidden}
+.stream-bar .progress-fill{height:100%;background:#e50914;transition:width .5s}
+.stream-bar .speed{color:#46d369;font-size:13px;min-width:100px}
+.stream-bar .seeds{color:#aaa;font-size:13px}
+.stream-bar .btn-stop{background:#333;color:#fff;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:13px}
+
+/* Video Player Overlay */
+.player-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column}
+.player-overlay.open{display:flex}
+.player-overlay video{width:100%;height:100%;object-fit:contain}
+.player-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:36px;cursor:pointer;z-index:301;opacity:.7;transition:opacity .2s}
+.player-close:hover{opacity:1}
+.player-loading{position:absolute;display:flex;flex-direction:column;align-items:center;gap:12px;color:#ccc;font-size:16px}
+.player-loading.hidden{display:none}
+
+/* Spinner */
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid #444;border-top-color:#e50914;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Responsive */
+@media(max-width:768px){
+  .nav{padding:10px 16px}
+  .hero{padding:0 16px 40px;height:50vh}
+  .hero-info h1{font-size:28px}
+  .row-section{padding:16px}
+  .card{min-width:140px;max-width:140px}
+  .card img{height:200px}
+  .detail-panel{width:100vw}
+}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav" id="nav">
+  <div class="logo">SLOTHFLIX</div>
+  <div class="search-box">
+    <span class="icon">&#128269;</span>
+    <input type="text" id="searchInput" placeholder="Search movies, TV shows..." autocomplete="off">
+  </div>
+  <div class="ip-badge" id="ipBadge" onclick="checkIP()">VPN: checking...</div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+  <div class="hero-info">
+    <h1 id="heroTitle">Loading...</h1>
+    <p id="heroDesc"></p>
+    <div>
+      <button class="btn btn-play" id="heroPlay" onclick="playHero()">&#9654; Play</button>
+      <button class="btn btn-queue" id="heroQueue" onclick="openDetail(currentHero)">More Info</button>
+    </div>
+  </div>
+</section>
+
+<!-- Video Player -->
+<div class="player-overlay" id="playerOverlay">
+  <button class="player-close" onclick="closePlayer()">&times;</button>
+  <video id="videoPlayer" controls autoplay></video>
+  <div class="player-loading" id="playerLoading">
+    <div class="spinner" style="width:40px;height:40px"></div>
+    <div id="playerStatus">Buffering...</div>
+  </div>
+</div>
+
+<!-- Catalog rows -->
+<div id="catalogRows"></div>
+
+<!-- Detail overlay -->
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" onclick="closeDetail()">&times;</button>
+  <div id="detailContent"></div>
+</div>
+
+<!-- Stream status bar -->
+<div class="stream-bar" id="streamBar">
+  <div class="spinner"></div>
+  <div class="progress"><div class="progress-fill" id="streamProgress"></div></div>
+  <span class="speed" id="streamSpeed">0 MB/s</span>
+  <span class="seeds" id="streamSeeds">0 seeds</span>
+  <button class="btn-stop" onclick="stopStream()">Stop</button>
+</div>
+
+<script>
+const API = '';
+let currentHero = null;
+let streamPollInterval = null;
+
+// --- Init ---
+document.addEventListener('DOMContentLoaded', () => {
+  loadCatalog();
+  checkIP();
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+  window.addEventListener('scroll', () => {
+    document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 50);
+  });
+});
+
+// --- IP Check ---
+async function checkIP() {
+  try {
+    const r = await fetch(API + '/api/ip');
+    const d = await r.json();
+    document.getElementById('ipBadge').textContent = 'VPN: ' + (d.ip || 'unknown');
+  } catch(e) {
+    document.getElementById('ipBadge').textContent = 'VPN: error';
+  }
+}
+
+// --- Catalog ---
+async function loadCatalog() {
+  const [movies, tv] = await Promise.all([
+    fetch(API + '/api/catalog/movies').then(r => r.json()).catch(() => []),
+    fetch(API + '/api/catalog/tv').then(r => r.json()).catch(() => []),
+  ]);
+  renderRow('Top Movies', movies);
+  renderRow('Top TV Shows', tv);
+
+  // Set hero to first movie
+  if (movies.length) {
+    currentHero = movies[0];
+    document.getElementById('heroTitle').textContent = currentHero.title;
+    loadBlurb(currentHero.title);
+  }
+}
+
+function renderRow(title, items) {
+  if (!items.length) return;
+  const container = document.getElementById('catalogRows');
+  const section = document.createElement('div');
+  section.className = 'row-section';
+  section.innerHTML = `<h2 class="row-title">${title}</h2><div class="row-wrap"><div class="row-scroll" id="row-${title.replace(/\s/g,'')}"></div></div>`;
+  container.appendChild(section);
+  const row = section.querySelector('.row-scroll');
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <img src="${API}/api/poster/${encodeURIComponent(item.title)}" loading="lazy"
+           onerror="this.onerror=null;this.src='/static/poster_default.png'">
+      <div class="card-title" title="${esc(item.title)}">${esc(item.title)}</div>
+      <div class="card-meta">
+        <span>${item.size || ''}</span>
+        <span class="seed-badge">&#9650; ${item.seeders || 0}</span>
+      </div>`;
+    card.onclick = () => openDetail(item);
+    row.appendChild(card);
+  });
+}
+
+// --- Search ---
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  const container = document.getElementById('catalogRows');
+  container.innerHTML = '<div class="row-section"><h2 class="row-title">Searching...</h2></div>';
+  try {
+    const r = await fetch(API + '/api/search?q=' + encodeURIComponent(q));
+    const results = await r.json();
+    container.innerHTML = '';
+    if (results.error) {
+      container.innerHTML = `<div class="row-section"><h2 class="row-title">Error: ${results.error}</h2></div>`;
+      return;
+    }
+    if (!results.length) {
+      container.innerHTML = '<div class="row-section"><h2 class="row-title">No results found</h2></div>';
+      return;
+    }
+    renderRow(`Results for "${esc(q)}"`, results);
+  } catch(e) {
+    container.innerHTML = `<div class="row-section"><h2 class="row-title">Search failed</h2></div>`;
+  }
+}
+
+// --- Detail Panel ---
+async function openDetail(item) {
+  currentHero = item;
+  const panel = document.getElementById('detailPanel');
+  const overlay = document.getElementById('overlay');
+  const content = document.getElementById('detailContent');
+
+  content.innerHTML = `<div class="detail-poster" style="display:flex;align-items:center;justify-content:center;background:#222;color:#444;font-size:48px">&#127916;</div>
+    <div class="detail-body">
+      <h2>${esc(item.title)}</h2>
+      <div class="detail-meta">
+        <span class="green">&#9650; ${item.seeders || 0} seeds</span>
+        <span>${item.leechers || 0} leechers</span>
+        <span>${item.size || ''}</span>
+        <span>${item.source || ''}</span>
+      </div>
+      <div id="detailDesc" class="detail-desc">Loading description...</div>
+      <div style="margin-top:16px">
+        <button class="btn btn-play" onclick="playItem(currentHero)">&#9654; Play</button>
+        <button class="btn btn-queue" onclick="loadFiles(currentHero)">Episodes</button>
+      </div>
+      <div id="episodeArea"></div>
+    </div>`;
+
+  panel.classList.add('open');
+  overlay.classList.add('open');
+
+  // Load blurb
+  loadBlurbFor(item.title);
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+async function loadBlurb(title) {
+  try {
+    const r = await fetch(API + '/api/blurb/' + encodeURIComponent(title));
+    const d = await r.json();
+    if (d.blurb) document.getElementById('heroDesc').textContent = d.blurb;
+  } catch(e) {}
+}
+
+async function loadBlurbFor(title) {
+  try {
+    const r = await fetch(API + '/api/blurb/' + encodeURIComponent(title));
+    const d = await r.json();
+    const el = document.getElementById('detailDesc');
+    if (el) el.textContent = d.blurb || 'No description available.';
+  } catch(e) {}
+}
+
+// --- File picker ---
+async function loadFiles(item) {
+  const area = document.getElementById('episodeArea');
+  area.innerHTML = '<p style="margin-top:16px">Loading files...</p>';
+  try {
+    const r = await fetch(API + '/api/torrent/files', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({magnet: item.magnet})
+    });
+    const d = await r.json();
+    if (d.error) { area.innerHTML = `<p style="color:#e50914">${d.error}</p>`; return; }
+    if (!d.files || !d.files.length) { area.innerHTML = '<p>No media files found.</p>'; return; }
+
+    // Single file — just play
+    if (d.files.length === 1) {
+      area.innerHTML = `<p>Single file: ${esc(d.files[0].name)} (${fmtSize(d.files[0].size)})</p>`;
+      return;
+    }
+
+    // Multi-file — show episode grid
+    let html = '<h3 style="margin-top:16px;margin-bottom:8px">Select Episode</h3><div class="episode-grid">';
+    d.files.forEach(f => {
+      html += `<div class="ep-card" onclick="playItem(currentHero, ${f.id})">
+        <div class="ep-name" title="${esc(f.name)}">${esc(f.name)}</div>
+        <div class="ep-size">${fmtSize(f.size)}</div>
+      </div>`;
+    });
+    html += '</div>';
+    area.innerHTML = html;
+  } catch(e) {
+    area.innerHTML = `<p style="color:#e50914">Failed: ${e.message}</p>`;
+  }
+}
+
+// --- Playback ---
+let currentSessionId = null;
+
+async function playHero() {
+  if (currentHero) playItem(currentHero);
+}
+
+function closePlayer() {
+  const overlay = document.getElementById('playerOverlay');
+  const video = document.getElementById('videoPlayer');
+  video.pause();
+  video.src = '';
+  overlay.classList.remove('open');
+}
+
+async function playItem(item, fileId) {
+  closeDetail();
+
+  // Show player overlay with spinner
+  const overlay = document.getElementById('playerOverlay');
+  const video = document.getElementById('videoPlayer');
+  const loading = document.getElementById('playerLoading');
+  const status = document.getElementById('playerStatus');
+  overlay.classList.add('open');
+  loading.classList.remove('hidden');
+  status.textContent = 'Starting torrent...';
+  video.src = '';
+
+  document.getElementById('streamBar').classList.add('open');
+  updateStreamUI('Starting...', 0);
+
+  try {
+    const body = {magnet: item.magnet};
+    if (fileId !== undefined) body.file_id = fileId;
+
+    const r = await fetch(API + '/api/stream/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+
+    if (d.error) {
+      status.textContent = 'Error: ' + d.error;
+      return;
+    }
+
+    currentSessionId = d.session_id;
+
+    // Start polling status
+    if (streamPollInterval) clearInterval(streamPollInterval);
+    streamPollInterval = setInterval(pollStatus, 2000);
+
+    // Poll until buffer >= 5%
+    status.textContent = 'Buffering...';
+    await waitForBuffer(d.session_id);
+
+    // Start playback
+    status.textContent = 'Starting playback...';
+    loading.classList.add('hidden');
+    video.src = '/play/' + currentSessionId;
+    video.play().catch(() => {});
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function waitForBuffer(sessionId) {
+  return new Promise((resolve) => {
+    const check = async () => {
+      try {
+        const r = await fetch(API + '/api/stream/status');
+        const d = await r.json();
+        if (!d.active) { resolve(); return; }
+        updateStreamUI(null, d.progress, d.download_rate, d.seeds);
+        document.getElementById('playerStatus').textContent =
+          'Buffering... ' + (d.progress || 0).toFixed(1) + '%';
+        if ((d.progress || 0) >= 5) {
+          resolve();
+        } else {
+          setTimeout(check, 1500);
+        }
+      } catch(e) {
+        setTimeout(check, 1500);
+      }
+    };
+    setTimeout(check, 1000);
+  });
+}
+
+async function pollStatus() {
+  try {
+    const r = await fetch(API + '/api/stream/status');
+    const d = await r.json();
+    if (!d.active) {
+      stopStream();
+      return;
+    }
+    updateStreamUI(null, d.progress, d.download_rate, d.seeds);
+  } catch(e) {}
+}
+
+function updateStreamUI(msg, progress, speed, seeds) {
+  const bar = document.getElementById('streamBar');
+  bar.classList.add('open');
+  if (progress !== undefined) {
+    document.getElementById('streamProgress').style.width = progress + '%';
+  }
+  if (speed !== undefined) {
+    document.getElementById('streamSpeed').textContent = speed.toFixed(1) + ' MB/s';
+  }
+  if (seeds !== undefined) {
+    document.getElementById('streamSeeds').textContent = seeds + ' seeds';
+  }
+}
+
+async function stopStream() {
+  if (streamPollInterval) { clearInterval(streamPollInterval); streamPollInterval = null; }
+  try { await fetch(API + '/api/stream/stop', {method: 'POST'}); } catch(e) {}
+  closePlayer();
+  document.getElementById('streamBar').classList.remove('open');
+}
+
+// --- Helpers ---
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  for (const u of ['B','KB','MB','GB','TB']) {
+    if (bytes < 1024) return bytes.toFixed(1) + ' ' + u;
+    bytes /= 1024;
+  }
+  return bytes.toFixed(1) + ' PB';
+}
+</script>
+</body>
+</html>

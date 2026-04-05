@@ -1,0 +1,11 @@
+use_default_settings: true
+
+server:
+  port: 8890
+  bind_address: "0.0.0.0"
+  secret_key: "slothflix-searxng-secret-change-me"
+
+search:
+  formats:
+    - html
+    - json

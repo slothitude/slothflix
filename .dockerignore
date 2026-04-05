@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+cache.db
+downloads/
+dist/
+build/
+*.spec
+.env
+.git/
+info/

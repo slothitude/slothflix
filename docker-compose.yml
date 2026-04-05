@@ -1,0 +1,53 @@
+services:
+  transmission:
+    image: haugene/transmission-openvpn
+    container_name: transmission
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    restart: unless-stopped
+    volumes:
+      - downloads:/downloads
+    ports:
+      - "8180:8180"      # SlothFlix
+      - "8890:8080"      # SearXNG      - "9191:9191"      # Transmission RPC
+    environment:
+      - OPENVPN_PROVIDER=PUREVPN
+      - OPENVPN_USERNAME=purevpn0s9075328
+      - OPENVPN_PASSWORD=5KLfSXhionRv3
+      - OPENVPN_CONFIG=nl2-auto-tcp-qr
+      - TRANSMISSION_RPC_PORT=9191
+      - TRANSMISSION_DOWNLOAD_DIR=/downloads
+      - LOCAL_NETWORK=172.16.0.0/12,192.168.0.0/16
+      - TRANSMISSION_RPC_USERNAME=admin
+      - TRANSMISSION_RPC_PASSWORD=adminadmin
+      - TRANSMISSION_RATIO_LIMIT=0
+      - TRANSMISSION_RATIO_LIMIT_ENABLED=true
+
+  slothflix:
+    build: .
+    container_name: slothflix
+    network_mode: service:transmission
+    depends_on: [transmission]
+    volumes:
+      - downloads:/downloads
+      - cache-data:/app/data
+    environment:
+      - TRANSMISSION_HOST=127.0.0.1
+      - TRANSMISSION_PORT=9191
+      - SEARXNG_HOST=http://127.0.0.1:8080
+      - DOWNLOAD_DIR=/downloads
+      - CACHE_DB_PATH=/app/data/cache.db
+      - FLASK_PORT=8180
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng
+    container_name: searxng
+    network_mode: service:transmission
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+    restart: unless-stopped
+
+volumes:
+  downloads:
+  cache-data:

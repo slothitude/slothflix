@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+data/
+*.db
+.env
+build/
+dist/
+downloads/
+info/
+static/poster_default.png
+%{http_code}
+-5
