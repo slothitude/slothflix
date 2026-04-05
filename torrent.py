@@ -3,6 +3,7 @@
 import os
 import time
 import logging
+import shutil
 import libtorrent as lt
 import transmission_rpc
 
@@ -130,6 +131,10 @@ def start_torrent(magnet_uri, save_path=None, log_callback=None, file_id=None):
     save_path = save_path or DOWNLOAD_DIR
     os.makedirs(save_path, exist_ok=True)
 
+    # Stop any previous torrent and wipe old downloads
+    _stop_lt_torrent()
+    _cleanup_downloads(save_path)
+
     # Ensure torrent is loaded
     files = get_torrent_files(magnet_uri, save_path, log_callback)
 
@@ -203,18 +208,21 @@ def get_stream_status():
 
 
 def stop_torrent():
-    """Stop current torrent and clean up."""
+    """Stop current torrent and clean up downloads."""
     global _current_torrent, _current_magnet, _selected_file_path
     _stop_lt_torrent()
 
-    # Also remove from Transmission
+    # Remove from Transmission (with data)
     try:
         tr = _get_tr_client()
         torrents = tr.get_torrents()
         for t in torrents:
-            tr.remove_torrent(t, delete_data=False)
+            tr.remove_torrent(t, delete_data=True)
     except Exception:
         pass
+
+    # Delete downloaded files
+    _cleanup_downloads()
 
     _current_magnet = None
     _selected_file_path = None
@@ -226,6 +234,24 @@ def _stop_lt_torrent():
         session = _get_lt_session()
         session.remove_torrent(_current_torrent)
     _current_torrent = None
+
+
+def _cleanup_downloads(save_path=None):
+    """Delete all files in the downloads directory to free space."""
+    dl_dir = save_path or DOWNLOAD_DIR
+    if not os.path.isdir(dl_dir):
+        return
+    for entry in os.listdir(dl_dir):
+        entry_path = os.path.join(dl_dir, entry)
+        try:
+            if os.path.isdir(entry_path):
+                shutil.rmtree(entry_path)
+                log.info(f"Deleted directory: {entry_path}")
+            else:
+                os.remove(entry_path)
+                log.info(f"Deleted file: {entry_path}")
+        except Exception as e:
+            log.warning(f"Failed to delete {entry_path}: {e}")
 
 
 def list_torrents():
