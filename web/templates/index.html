@@ -1143,11 +1143,11 @@ function launchGame(item) {
   window.EJS_backgroundColor = '#000';
   window.EJS_netplayEnabled = true;
   window.EJS_netplayServer = 'wss://netplay.emulatorjs.com';
-  window.EJS_baseUrl = 'https://cdn.emulatorjs.org/stable/data';
+  window.EJS_baseUrl = '/static/emulatorjs/data';
 
   // Load EmulatorJS loader
   const script = document.createElement('script');
-  script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+  script.src = '/static/emulatorjs/data/loader.js';
   script.onerror = () => {
     container.innerHTML = '<p style="color:#e50914;padding:40px;text-align:center">Failed to load EmulatorJS. Check your internet connection.</p>';
   };
