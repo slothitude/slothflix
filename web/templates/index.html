@@ -110,6 +110,12 @@ a{color:inherit;text-decoration:none}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid #444;border-top-color:#e50914;border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* Next Episode */
+.next-ep-overlay{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:310;background:rgba(0,0,0,.85);border-radius:8px;padding:24px 36px;text-align:center;max-width:400px}
+.next-ep-title{font-size:16px;color:#ccc;margin-bottom:12px}
+.next-ep-countdown{font-size:24px;font-weight:700;color:#e5e5e5;margin-bottom:16px}
+.next-ep-buttons{display:flex;gap:12px;justify-content:center}
+
 /* Responsive */
 @media(max-width:768px){
   .nav{padding:10px 16px}
@@ -155,7 +161,9 @@ a{color:inherit;text-decoration:none}
 <!-- Video Player -->
 <div class="player-overlay" id="playerOverlay">
   <button class="player-close" onclick="closePlayer()">&times;</button>
-  <iframe class="trailer-iframe" id="trailerIframe" style="display:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>
+  <div class="trailer-iframe" id="trailerWrapper" style="display:none">
+    <div id="trailerContainer"></div>
+  </div>
   <video id="videoPlayer" controls autoplay style="position:relative;z-index:1"></video>
   <div class="player-loading" id="playerLoading">
     <img src="/static/sloth_logo.png" alt="" style="width:120px;opacity:.5">
@@ -169,6 +177,14 @@ a{color:inherit;text-decoration:none}
     <div class="dl-progress-wrap" id="dlProgressWrap" style="display:none">
       <div class="dl-progress-bar"><div class="fill" id="dlFill"></div></div>
       <div class="dl-pct" id="dlPct">0%</div>
+    </div>
+  </div>
+  <div class="next-ep-overlay" id="nextEpOverlay" style="display:none">
+    <div class="next-ep-title" id="nextEpTitle"></div>
+    <div class="next-ep-countdown" id="nextEpCountdown"></div>
+    <div class="next-ep-buttons">
+      <button class="btn btn-play" onclick="playNextEpisode()">Play Now</button>
+      <button class="btn btn-queue" onclick="cancelNextEpisode()">Cancel</button>
     </div>
   </div>
 </div>
@@ -199,6 +215,13 @@ let streamPollInterval = null;
 let trailerPlaylist = [];
 let trailerIndex = 0;
 let trailerActive = false;
+let currentFileList = [];
+let currentFileId = null;
+let ytPlayer = null;
+let ytApiReady = null;
+let trailerDone = Promise.resolve();
+let trailerDoneResolve = null;
+let nextEpisodeTimer = null;
 
 // Auth-aware fetch — Flask injects the credentials the user logged in with
 const _authHeader = {{ auth_header | tojson }};
@@ -224,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('scroll', () => {
     document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 50);
   });
+  document.getElementById('videoPlayer').addEventListener('ended', onVideoEnded);
 });
 
 function dismissSplash() {
@@ -424,6 +448,8 @@ async function loadFiles(item) {
     if (d.error) { area.innerHTML = `<p style="color:#e50914">${d.error}</p>`; return; }
     if (!d.files || !d.files.length) { area.innerHTML = '<p>No media files found.</p>'; return; }
 
+    currentFileList = d.files;
+
     // Single file — just play
     if (d.files.length === 1) {
       area.innerHTML = `<p>Single file: ${esc(d.files[0].name)} (${fmtSize(d.files[0].size)})</p>`;
@@ -459,10 +485,13 @@ function closePlayer() {
   video.src = '';
   stopTrailerPreRoll();
   overlay.classList.remove('open');
+  if (nextEpisodeTimer) { clearInterval(nextEpisodeTimer); nextEpisodeTimer = null; }
+  document.getElementById('nextEpOverlay').style.display = 'none';
 }
 
 async function playItem(item, fileId) {
   closeDetail();
+  currentFileId = fileId !== undefined ? fileId : null;
 
   // Show player overlay with spinner
   const overlay = document.getElementById('playerOverlay');
@@ -521,11 +550,34 @@ async function playItem(item, fileId) {
   }
 }
 
-// --- Trailer Pre-Roll ---
+// --- Trailer Pre-Roll (YouTube IFrame Player API) ---
+function loadYTApi() {
+  if (!ytApiReady) {
+    ytApiReady = new Promise(resolve => {
+      window.onYouTubeIframeAPIReady = resolve;
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+      setTimeout(resolve, 10000);
+    });
+  }
+  return ytApiReady;
+}
+
+function onTrailerStateChange(event) {
+  if (event.data === YT.PlayerState.ENDED) {
+    if (trailerDoneResolve) { trailerDoneResolve(); trailerDoneResolve = null; }
+    if (trailerActive && trailerIndex + 1 < trailerPlaylist.length) {
+      trailerIndex++;
+      trailerDone = new Promise(r => { trailerDoneResolve = r; });
+      if (ytPlayer) ytPlayer.loadVideoById(trailerPlaylist[trailerIndex].youtube_id);
+    }
+  }
+}
+
 async function startTrailerPreRoll() {
-  const iframe = document.getElementById('trailerIframe');
+  const wrapper = document.getElementById('trailerWrapper');
   try {
-    // Check if YouTube is reachable before embedding
     await new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve();
@@ -533,43 +585,54 @@ async function startTrailerPreRoll() {
       setTimeout(() => reject(new Error('timeout')), 5000);
       img.src = 'https://www.youtube.com/favicon.ico?' + Date.now();
     });
-
     const r = await authFetch(API + '/api/trailers');
     trailerPlaylist = await r.json();
   } catch(e) { return; }
   if (!trailerPlaylist.length) return;
+
   trailerIndex = 0;
   trailerActive = true;
-  iframe.style.display = 'block';
-  iframe.classList.remove('fade-out');
-  loadTrailer(0);
-}
+  wrapper.style.display = 'block';
+  wrapper.classList.remove('fade-out');
 
-function loadTrailer(index) {
-  if (!trailerActive || index >= trailerPlaylist.length) return;
-  trailerIndex = index;
-  const ytId = trailerPlaylist[index].youtube_id;
-  const iframe = document.getElementById('trailerIframe');
-  // Enable autoplay + loop playlist via YouTube embed API
-  iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&enablejsapi=1&origin=${location.origin}&playlist=${trailerPlaylist.map(t=>t.youtube_id).join(',')}`;
+  await loadYTApi();
+
+  wrapper.innerHTML = '<div id="trailerContainer"></div>';
+  trailerDone = new Promise(r => { trailerDoneResolve = r; });
+
+  if (ytPlayer) { try { ytPlayer.destroy(); } catch(e) {} ytPlayer = null; }
+
+  ytPlayer = new YT.Player('trailerContainer', {
+    width: '100%',
+    height: '100%',
+    videoId: trailerPlaylist[0].youtube_id,
+    playerVars: { autoplay: 1, mute: 1, controls: 0, modestbranding: 1, rel: 0 },
+    events: {
+      onStateChange: onTrailerStateChange,
+      onReady: e => e.target.playVideo()
+    }
+  });
 }
 
 function fadeOutTrailer() {
   trailerActive = false;
-  const iframe = document.getElementById('trailerIframe');
-  iframe.classList.add('fade-out');
+  const wrapper = document.getElementById('trailerWrapper');
+  wrapper.classList.add('fade-out');
   setTimeout(() => {
-    iframe.src = '';
-    iframe.style.display = 'none';
-    iframe.classList.remove('fade-out');
+    if (ytPlayer) { try { ytPlayer.destroy(); } catch(e) {} ytPlayer = null; }
+    wrapper.innerHTML = '<div id="trailerContainer"></div>';
+    wrapper.style.display = 'none';
+    wrapper.classList.remove('fade-out');
   }, 900);
 }
 
 function stopTrailerPreRoll() {
   trailerActive = false;
-  const iframe = document.getElementById('trailerIframe');
-  iframe.src = '';
-  iframe.style.display = 'none';
+  if (ytPlayer) { try { ytPlayer.destroy(); } catch(e) {} ytPlayer = null; }
+  const wrapper = document.getElementById('trailerWrapper');
+  wrapper.innerHTML = '<div id="trailerContainer"></div>';
+  wrapper.style.display = 'none';
+  if (trailerDoneResolve) { trailerDoneResolve(); trailerDoneResolve = null; }
 }
 
 async function waitForBuffer(sessionId) {
@@ -597,6 +660,7 @@ async function waitForBuffer(sessionId) {
         document.getElementById('dlPeers').textContent = d.peers || '--';
 
         if (pct >= 10) {
+          await trailerDone;
           resolve();
         } else {
           setTimeout(check, 1500);
@@ -640,6 +704,67 @@ async function stopStream() {
   try { await authFetch(API + '/api/stream/stop', {method: 'POST'}); } catch(e) {}
   closePlayer();
   document.getElementById('streamBar').classList.remove('open');
+}
+
+// --- Next Episode ---
+function onVideoEnded() {
+  if (!currentFileList.length || currentFileId === null) {
+    showEndOverlay(null);
+    return;
+  }
+  const idx = currentFileList.findIndex(f => f.id === currentFileId);
+  const next = idx >= 0 && idx + 1 < currentFileList.length ? currentFileList[idx + 1] : null;
+  showEndOverlay(next);
+}
+
+function showEndOverlay(nextFile) {
+  const overlay = document.getElementById('nextEpOverlay');
+  const title = document.getElementById('nextEpTitle');
+  const countdown = document.getElementById('nextEpCountdown');
+  if (nextEpisodeTimer) { clearInterval(nextEpisodeTimer); nextEpisodeTimer = null; }
+
+  // Reset button states
+  overlay.querySelector('.btn-play').style.display = '';
+  overlay.querySelector('.btn-queue').textContent = 'Cancel';
+
+  if (nextFile) {
+    title.textContent = 'Next: ' + nextFile.name;
+    let seconds = 5;
+    countdown.textContent = 'Playing in ' + seconds + 's...';
+    overlay.style.display = 'block';
+    nextEpisodeTimer = setInterval(() => {
+      seconds--;
+      if (seconds <= 0) {
+        clearInterval(nextEpisodeTimer);
+        nextEpisodeTimer = null;
+        playNextEpisode();
+      } else {
+        countdown.textContent = 'Playing in ' + seconds + 's...';
+      }
+    }, 1000);
+  } else {
+    title.textContent = '';
+    countdown.textContent = '';
+    overlay.querySelector('.btn-play').style.display = 'none';
+    overlay.querySelector('.btn-queue').textContent = 'Back to Browse';
+    overlay.style.display = 'block';
+  }
+}
+
+function playNextEpisode() {
+  if (nextEpisodeTimer) { clearInterval(nextEpisodeTimer); nextEpisodeTimer = null; }
+  document.getElementById('nextEpOverlay').style.display = 'none';
+  const idx = currentFileList.findIndex(f => f.id === currentFileId);
+  const next = idx >= 0 && idx + 1 < currentFileList.length ? currentFileList[idx + 1] : null;
+  if (next && currentHero) {
+    playItem(currentHero, next.id);
+  }
+}
+
+function cancelNextEpisode() {
+  if (nextEpisodeTimer) { clearInterval(nextEpisodeTimer); nextEpisodeTimer = null; }
+  document.getElementById('nextEpOverlay').style.display = 'none';
+  closePlayer();
 }
 
 // --- Helpers ---
