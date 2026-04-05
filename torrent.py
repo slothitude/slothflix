@@ -163,10 +163,12 @@ def start_torrent(magnet_uri, save_path=None, log_callback=None, file_id=None):
     handle.set_sequential_download(True)
     handle.resume()
 
-    # Build file path — file_path() already includes torrent name as parent for
-    # multi-file torrents, so we only prepend save_path
+    # Build file path — for multi-file torrents, files are saved under
+    # save_path/torrent_name/, so we must include torrent_info.name().
+    # For single-file torrents, file_path() returns just the filename
+    # and the file is saved directly in save_path/torrent_name/.
     file_path = os.path.join(
-        save_path, torrent_info.files().file_path(selected["id"])
+        save_path, torrent_info.name(), torrent_info.files().file_path(selected["id"])
     )
     _selected_file_path = file_path
 

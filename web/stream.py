@@ -106,24 +106,53 @@ def play_file(session_id):
     # Retry loop — file may take time to appear on disk after buffer target
     import time
     import logging
+    import glob as globmod
     _log = logging.getLogger(__name__)
     _log.info("play_file: waiting for %s", file_path)
-    for i in range(60):
+
+    # The expected filename (without path) to search for
+    expected_name = os.path.basename(file_path)
+
+    for i in range(120):  # up to 60s
+        # Check exact path
         if os.path.exists(file_path):
             _log.info("play_file: file found after %.1fs", i * 0.5)
             break
-        # Also check with .!qB suffix (qBittorrent partial downloads)
-        part_path = file_path + ".!qB"
-        if os.path.exists(part_path):
-            _log.info("play_file: found partial file .!qB after %.1fs", i * 0.5)
-            file_path = part_path
-            break
-        time.sleep(0.5)
+        # Check partial download suffixes
+        for suffix in (".!qB", ".part"):
+            part_path = file_path + suffix
+            if os.path.exists(part_path):
+                _log.info("play_file: found partial %s after %.1fs", suffix, i * 0.5)
+                file_path = part_path
+                break
+        else:
+            # Fallback: search download dir for any file matching the name
+            dl_dir = os.getenv("DOWNLOAD_DIR", "/downloads")
+            if i % 4 == 0 and expected_name:  # every 2s
+                base_name = os.path.splitext(expected_name)[0]
+                matches = globmod.glob(os.path.join(dl_dir, "**", base_name + "*"), recursive=True)
+                if matches:
+                    _log.info("play_file: found via glob: %s", matches[0])
+                    file_path = matches[0]
+                    break
+            time.sleep(0.5)
+            continue
+        break  # found a partial file
     else:
         dl_dir = os.getenv("DOWNLOAD_DIR", "/downloads")
-        _log.error("play_file: %s not found after 30s. Contents of %s: %s",
-                    file_path, dl_dir, os.listdir(dl_dir) if os.path.isdir(dl_dir) else "dir missing")
-        return f"File not found: {file_path}", 404
+        # Last-resort glob search
+        base_name = os.path.splitext(expected_name)[0] if expected_name else ""
+        if base_name:
+            matches = globmod.glob(os.path.join(dl_dir, "**", base_name + "*"), recursive=True)
+            if matches:
+                _log.info("play_file: last-resort glob found: %s", matches[0])
+                file_path = matches[0]
+            else:
+                _log.error("play_file: %s not found after 60s. Contents of %s: %s",
+                            file_path, dl_dir, os.listdir(dl_dir) if os.path.isdir(dl_dir) else "dir missing")
+                return f"File not found: {file_path}", 404
+        else:
+            return f"File not found: {file_path}", 404
 
     ext = os.path.splitext(file_path)[1].lower()
 
