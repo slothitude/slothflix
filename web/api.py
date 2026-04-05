@@ -413,7 +413,12 @@ def vimm_info(game_id):
 
 @api_bp.route("/vimm/download/<int:game_id>", methods=["POST"])
 def vimm_download(game_id):
-    """Download a ROM from vimm.net and save to the ROM directory."""
+    """Download a ROM from vimm.net and save to the ROM directory.
+
+    Uses host curl (bypasses VPN) since vimm.net blocks VPN downloads.
+    """
+    import subprocess
+
     data = request.get_json(force=True, silent=True) or {}
     media_id = data.get("media_id")
 
@@ -427,10 +432,60 @@ def vimm_download(game_id):
     # Determine system directory
     system = data.get("system", "nes")
     dest_dir = os.path.join(ROM_BASE_DIR, system)
+    os.makedirs(dest_dir, exist_ok=True)
 
-    filepath = vimm.download_rom(game_id, media_id, dest_dir)
+    # Try downloading through host curl first (bypasses VPN block)
+    # Determine filename from game info
+    info = vimm.get_game_info(game_id)
+    title = info.get("title", f"game_{game_id}") if info else f"game_{game_id}"
+    ext = ".nes"
+    if info and info.get("system_name"):
+        sys_name = info["system_name"].lower()
+        for vimm_key, ext_val in vimm.SYSTEM_EXTENSIONS.items():
+            if vimm_key.lower() in sys_name:
+                ext = ext_val
+                break
+
+    filename = title + ext
+    # Clean filename
+    filename = "".join(c for c in filename if c not in r'\/:*?"<>|')
+    filepath = os.path.join(dest_dir, filename)
+
+    dl_url = f"https://dl3.vimm.net/?mediaId={media_id}"
+    referer = f"https://vimm.net/vault/{game_id}"
+
+    try:
+        result = subprocess.run(
+            [
+                "curl", "-sL", "-o", filepath, "-w", "%{http_code}",
+                dl_url,
+                "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "-H", f"Referer: {referer}",
+                "--max-time", "120",
+            ],
+            capture_output=True, text=True, timeout=130,
+        )
+        http_code = result.stdout.strip() if result.stdout else ""
+        if http_code == "200" and os.path.isfile(filepath) and os.path.getsize(filepath) > 100:
+            log.info(f"Downloaded {filename} via host curl ({os.path.getsize(filepath)} bytes)")
+            return jsonify({
+                "status": "ok",
+                "path": filepath,
+                "filename": filename,
+                "system": system,
+            })
+        else:
+            log.error(f"Host curl download failed: HTTP {http_code}")
+            # Cleanup failed download
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+    except Exception as e:
+        log.error(f"Host curl download error: {e}")
+
+    # Fallback: try through VPN (might work for some regions)
+    filepath = vimm.download_rom(game_id, media_id, dest_dir, filename)
     if not filepath:
-        return jsonify({"error": "Download failed"}), 500
+        return jsonify({"error": "Download failed (vimm.net may block VPN)"}), 500
 
     return jsonify({
         "status": "ok",
