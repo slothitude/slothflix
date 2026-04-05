@@ -221,10 +221,10 @@ def download_rom(game_id, media_id, dest_dir, filename=None):
                     ext = ext_val
                     break
 
-        # POST to download server
-        dl_resp = _session.post(
+        # GET from download server (form changes method to GET on submit)
+        dl_resp = _session.get(
             DL_BASE,
-            data={"mediaId": str(media_id)},
+            params={"mediaId": str(media_id)},
             timeout=60,
             allow_redirects=True,
         )
