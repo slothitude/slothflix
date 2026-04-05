@@ -566,6 +566,8 @@ async function playItem(item, fileId) {
 function showPlayReadyOverlay() {
   const overlay = document.getElementById('playReadyOverlay');
   const title = document.getElementById('playReadyTitle');
+  // Make trailer wrapper non-interactive so overlay captures clicks
+  document.getElementById('trailerWrapper').style.pointerEvents = 'none';
   let displayName = currentHero ? currentHero.title : '';
   if (currentFileId !== null && currentFileList.length) {
     const f = currentFileList.find(f => f.id === currentFileId);
