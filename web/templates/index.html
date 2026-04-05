@@ -141,7 +141,7 @@ a{color:inherit;text-decoration:none}
 <!-- Hero -->
 <section class="hero" id="hero">
   <div class="hero-info">
-    <h1 id="heroTitle">Loading...</h1>
+    <h1 id="heroTitle">SlothFlix</h1>
     <p id="heroDesc"></p>
     <div>
       <button class="btn btn-play" id="heroPlay" onclick="playHero()">&#9654; Play</button>
@@ -198,6 +198,20 @@ let trailerPlaylist = [];
 let trailerIndex = 0;
 let trailerActive = false;
 
+// Auth-aware fetch — Flask injects the credentials the user logged in with
+const _authHeader = {{ auth_header | tojson }};
+
+function authFetch(url, opts = {}) {
+  if (_authHeader) {
+    opts.headers = Object.assign({}, opts.headers || {}, {'Authorization': _authHeader});
+    // Avoid credentials-in-URL issues — resolve relative URLs against clean origin
+    if (typeof url === 'string' && !url.startsWith('http')) {
+      url = location.origin + url;
+    }
+  }
+  return fetch(url, opts);
+}
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
   loadCatalog();
@@ -219,7 +233,7 @@ function dismissSplash() {
 // --- IP Check ---
 async function checkIP() {
   try {
-    const r = await fetch(API + '/api/ip');
+    const r = await authFetch(API + '/api/ip');
     const d = await r.json();
     document.getElementById('ipBadge').textContent = 'VPN: ' + (d.ip || 'unknown');
   } catch(e) {
@@ -230,8 +244,8 @@ async function checkIP() {
 // --- Catalog ---
 async function loadCatalog() {
   const [movies, tv] = await Promise.all([
-    fetch(API + '/api/catalog/movies').then(r => r.json()).catch(() => []),
-    fetch(API + '/api/catalog/tv').then(r => r.json()).catch(() => []),
+    authFetch(API + '/api/catalog/movies').then(r => r.json()).catch(() => []),
+    authFetch(API + '/api/catalog/tv').then(r => r.json()).catch(() => []),
   ]);
   renderRow('Top Movies', movies);
   renderRow('Top TV Shows', tv);
@@ -278,7 +292,7 @@ async function doSearch() {
   const container = document.getElementById('catalogRows');
   container.innerHTML = '<div class="row-section"><h2 class="row-title">Searching...</h2></div>';
   try {
-    const r = await fetch(API + '/api/search?q=' + encodeURIComponent(q));
+    const r = await authFetch(API + '/api/search?q=' + encodeURIComponent(q));
     const results = await r.json();
     container.innerHTML = '';
     if (results.error) {
@@ -333,7 +347,7 @@ function closeDetail() {
 
 async function loadBlurb(title) {
   try {
-    const r = await fetch(API + '/api/blurb/' + encodeURIComponent(title));
+    const r = await authFetch(API + '/api/blurb/' + encodeURIComponent(title));
     const d = await r.json();
     if (d.blurb) document.getElementById('heroDesc').textContent = d.blurb;
   } catch(e) {}
@@ -341,7 +355,7 @@ async function loadBlurb(title) {
 
 async function loadBlurbFor(title) {
   try {
-    const r = await fetch(API + '/api/blurb/' + encodeURIComponent(title));
+    const r = await authFetch(API + '/api/blurb/' + encodeURIComponent(title));
     const d = await r.json();
     const el = document.getElementById('detailDesc');
     if (el) el.textContent = d.blurb || 'No description available.';
@@ -353,7 +367,7 @@ async function loadFiles(item) {
   const area = document.getElementById('episodeArea');
   area.innerHTML = '<p style="margin-top:16px">Loading files...</p>';
   try {
-    const r = await fetch(API + '/api/torrent/files', {
+    const r = await authFetch(API + '/api/torrent/files', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({magnet: item.magnet})
@@ -422,7 +436,7 @@ async function playItem(item, fileId) {
     const body = {magnet: item.magnet};
     if (fileId !== undefined) body.file_id = fileId;
 
-    const r = await fetch(API + '/api/stream/start', {
+    const r = await authFetch(API + '/api/stream/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body)
@@ -472,7 +486,7 @@ async function startTrailerPreRoll() {
       img.src = 'https://www.youtube.com/favicon.ico?' + Date.now();
     });
 
-    const r = await fetch(API + '/api/trailers');
+    const r = await authFetch(API + '/api/trailers');
     trailerPlaylist = await r.json();
   } catch(e) { return; }
   if (!trailerPlaylist.length) return;
@@ -519,7 +533,7 @@ async function waitForBuffer(sessionId) {
   return new Promise((resolve) => {
     const check = async () => {
       try {
-        const r = await fetch(API + '/api/stream/status');
+        const r = await authFetch(API + '/api/stream/status');
         const d = await r.json();
         if (!d.active) { resolve(); return; }
         updateStreamUI(null, d.progress, d.download_rate, d.seeds);
@@ -549,7 +563,7 @@ async function waitForBuffer(sessionId) {
 
 async function pollStatus() {
   try {
-    const r = await fetch(API + '/api/stream/status');
+    const r = await authFetch(API + '/api/stream/status');
     const d = await r.json();
     if (!d.active) {
       stopStream();
@@ -575,7 +589,7 @@ function updateStreamUI(msg, progress, speed, seeds) {
 
 async function stopStream() {
   if (streamPollInterval) { clearInterval(streamPollInterval); streamPollInterval = null; }
-  try { await fetch(API + '/api/stream/stop', {method: 'POST'}); } catch(e) {}
+  try { await authFetch(API + '/api/stream/stop', {method: 'POST'}); } catch(e) {}
   closePlayer();
   document.getElementById('streamBar').classList.remove('open');
 }

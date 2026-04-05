@@ -51,7 +51,15 @@ def create_app():
     @app.route("/")
     def index():
         from flask import render_template
-        return render_template("index.html")
+        # Pass auth header so JS fetch calls can authenticate
+        auth_header = ""
+        auth = request.authorization
+        if auth and _auth_user and _auth_pass:
+            import hashlib
+            auth_header = "Basic " + __import__("base64").b64encode(
+                f"{auth.username}:{auth.password}".encode()
+            ).decode()
+        return render_template("index.html", auth_header=auth_header)
 
     # Trailer pre-roll: refresh on startup, then daily
     _schedule_trailer_refresh()
