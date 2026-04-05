@@ -1,4 +1,24 @@
 services:
+  traefik:
+    image: traefik:v3
+    container_name: traefik
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /opt/traefik/certs:/certs:ro
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8888"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--providers.file.filename=/certs/cert.yaml"
+      - "--providers.file.watch=true"
+
   transmission:
     image: haugene/transmission-openvpn
     container_name: transmission
@@ -8,8 +28,6 @@ services:
     volumes:
       - downloads:/downloads
     ports:
-      - "8180:8180"      # SlothFlix
-      - "8890:8080"      # SearXNG
       - "9191:9191"      # Transmission RPC
     environment:
       - OPENVPN_PROVIDER=PUREVPN
@@ -23,6 +41,13 @@ services:
       - TRANSMISSION_RPC_PASSWORD=adminadmin
       - TRANSMISSION_RATIO_LIMIT=0
       - TRANSMISSION_RATIO_LIMIT_ENABLED=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.slothflix.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.slothflix.entrypoints=websecure"
+      - "traefik.http.routers.slothflix.tls=true"
+      - "traefik.http.services.slothflix.loadbalancer.server.port=8180"
+      - "traefik.http.routers.slothflix.service=slothflix"
 
   slothflix:
     build: .
@@ -44,7 +69,7 @@ services:
       - TELEGRAM_BOT_TOKEN=8463691096:AAFSzCOSlI2yOc8Lyb7fby8zY0RJQwSyagQ
       - TELEGRAM_ADMIN_ID=5597932516
       - TOKEN_EXPIRY_DAYS=7
-      - APP_URL=http://localhost:8180
+      - APP_URL=https://slothitude.giize.com
     restart: unless-stopped
 
   searxng:
