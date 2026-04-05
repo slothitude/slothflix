@@ -588,7 +588,7 @@ async function waitForBuffer(sessionId) {
 
         const pct = d.progress || 0;
         document.getElementById('playerStatus').textContent =
-          pct >= 5 ? 'Starting playback...' : 'Buffering...';
+          pct >= 10 ? 'Starting playback...' : 'Buffering...';
         document.getElementById('dlFill').style.width = pct + '%';
         document.getElementById('dlPct').textContent = pct.toFixed(1) + '%';
         document.getElementById('dlSpeed').textContent =
@@ -596,7 +596,7 @@ async function waitForBuffer(sessionId) {
         document.getElementById('dlSeeds').textContent = d.seeds || '--';
         document.getElementById('dlPeers').textContent = d.peers || '--';
 
-        if (pct >= 5) {
+        if (pct >= 10) {
           resolve();
         } else {
           setTimeout(check, 1500);

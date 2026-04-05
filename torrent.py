@@ -82,10 +82,9 @@ def get_torrent_files(magnet_uri, save_path=None, log_callback=None):
 
     params = lt.parse_magnet_uri(magnet_uri)
     params.save_path = save_path
+    params.storage_mode = lt.storage_mode_t.storage_mode_sparse
     handle = session.add_torrent(params)
     _log("Magnet added, waiting for metadata...")
-
-    # Wait for metadata (up to 60s)
     for _ in range(60):
         if handle.is_valid() and handle.has_metadata():
             break
@@ -176,8 +175,8 @@ def start_torrent(magnet_uri, save_path=None, log_callback=None, file_id=None):
     )
     _selected_file_path = file_path
 
-    # Wait for 5% buffer
-    BUFFER_TARGET = 5
+    # Wait for 10% buffer
+    BUFFER_TARGET = 10
     _log(f"Buffering to {BUFFER_TARGET}%...")
     while True:
         if not handle.is_valid():
