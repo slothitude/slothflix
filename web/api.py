@@ -445,12 +445,15 @@ def vimm_cover_proxy(game_id):
     """Proxy cover art from vimm.net."""
     try:
         import requests as req
-        resp = req.get(
-            f"https://dl.vimm.net/image.php?type=box&id={game_id}",
-            timeout=10,
-        )
-        if resp.status_code != 200 or len(resp.content) < 100:
-            return "", 404
-        return Response(resp.content, mimetype="image/jpeg")
+        # Try box first, then cart
+        for img_type in ("box", "cart"):
+            resp = req.get(
+                f"https://dl.vimm.net/image.php?type={img_type}&id={game_id}",
+                timeout=20,
+            )
+            if resp.status_code == 200 and len(resp.content) > 100:
+                ct = resp.headers.get("Content-Type", "image/jpeg")
+                return Response(resp.content, mimetype=ct)
+        return "", 404
     except Exception:
         return "", 404
