@@ -41,6 +41,10 @@ services:
       - FLASK_PORT=8180
       - AUTH_USER=admin
       - AUTH_PASS=slothflix
+      - TELEGRAM_BOT_TOKEN=8463691096:AAFSzCOSlI2yOc8Lyb7fby8zY0RJQwSyagQ
+      - TELEGRAM_ADMIN_ID=5597932516
+      - TOKEN_EXPIRY_DAYS=7
+      - APP_URL=http://localhost:8180
     restart: unless-stopped
 
   searxng:

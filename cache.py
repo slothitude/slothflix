@@ -51,6 +51,14 @@ def init_db():
             thumbnail_url TEXT,
             updated_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS tokens (
+            token TEXT PRIMARY KEY,
+            telegram_user_id INTEGER,
+            telegram_username TEXT,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            revoked INTEGER DEFAULT 0
+        );
     """)
     con.close()
 
@@ -187,3 +195,54 @@ def load_trailers():
     ).fetchall()
     con.close()
     return [dict(r) for r in rows]
+
+
+# --- tokens ---
+
+def save_token(token, user_id, username, expires_at):
+    """Revoke old tokens for user, insert new token."""
+    now = datetime.utcnow().isoformat()
+    con = _conn()
+    with con:
+        con.execute("UPDATE tokens SET revoked = 1 WHERE telegram_user_id = ? AND revoked = 0", (user_id,))
+        con.execute(
+            "INSERT INTO tokens (token, telegram_user_id, telegram_username, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (token, user_id, username, now, expires_at),
+        )
+    con.close()
+
+
+def validate_token(token):
+    """Return token row dict if valid (not expired, not revoked), else None."""
+    now = datetime.utcnow().isoformat()
+    con = _conn()
+    row = con.execute(
+        "SELECT * FROM tokens WHERE token = ? AND revoked = 0 AND expires_at > ?",
+        (token, now),
+    ).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
+def revoke_token(token=None, user_id=None):
+    """Mark token(s) as revoked by token string or user_id."""
+    con = _conn()
+    with con:
+        if token:
+            con.execute("UPDATE tokens SET revoked = 1 WHERE token = ?", (token,))
+        elif user_id:
+            con.execute("UPDATE tokens SET revoked = 1 WHERE telegram_user_id = ?", (user_id,))
+    con.close()
+
+
+def get_user_token(user_id):
+    """Return active (non-expired, non-revoked) token for user, or None."""
+    now = datetime.utcnow().isoformat()
+    con = _conn()
+    row = con.execute(
+        "SELECT * FROM tokens WHERE telegram_user_id = ? AND revoked = 0 AND expires_at > ? ORDER BY created_at DESC LIMIT 1",
+        (user_id, now),
+    ).fetchone()
+    con.close()
+    return dict(row) if row else None

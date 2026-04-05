@@ -4,3 +4,4 @@ beautifulsoup4>=4.12
 transmission-rpc>=7.0
 libtorrent
 yt-dlp
+python-telegram-bot>=20.0

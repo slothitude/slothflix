@@ -3,7 +3,7 @@
 import hashlib
 import os
 import threading
-from flask import Flask, request, Response
+from flask import Flask, request, Response, redirect, jsonify, render_template
 from .api import api_bp
 from .stream import stream_bp
 
@@ -22,15 +22,80 @@ def create_app():
     _auth_user = os.getenv("AUTH_USER", "")
     _auth_pass = os.getenv("AUTH_PASS", "")
 
-    if _auth_user and _auth_pass:
-        @app.before_request
-        def _check_auth():
-            auth = request.authorization
-            if not auth or auth.username != _auth_user or auth.password != _auth_pass:
-                return Response(
-                    "Login required", 401,
-                    {"WWW-Authenticate": 'Basic realm="SlothFlix"'},
+    # Paths that skip auth
+    _auth_skip = {"/login", "/api/auth/token"}
+
+    def _is_authed():
+        # 1. Cookie token
+        token = request.cookies.get("slothflix_token")
+        if token:
+            import cache
+            if cache.validate_token(token):
+                return True
+        # 2. HTTP Basic Auth
+        auth = request.authorization
+        if auth and _auth_user and _auth_pass:
+            if auth.username == _auth_user and auth.password == _auth_pass:
+                return True
+        return False
+
+    @app.before_request
+    def _check_auth():
+        # Auto-auth: ?token= in URL → validate, set cookie, redirect to bare path
+        url_token = request.args.get("token")
+        if url_token:
+            import cache
+            row = cache.validate_token(url_token)
+            if row:
+                resp = redirect(request.path)
+                resp.set_cookie(
+                    "slothflix_token", url_token,
+                    max_age=60 * 60 * 24 * int(os.getenv("TOKEN_EXPIRY_DAYS", "7")),
+                    httponly=True,
+                    samesite="Lax",
                 )
+                return resp
+            # Invalid token in URL → redirect to login
+            return redirect("/login")
+
+        if not (_auth_user and _auth_pass):
+            return None
+        if request.path in _auth_skip:
+            return None
+        if _is_authed():
+            return None
+        # Browser request → redirect to login
+        if request.accept_mimetypes.accept_html and not request.is_json:
+            return redirect("/login")
+        return Response(
+            "Login required", 401,
+            {"WWW-Authenticate": 'Basic realm="SlothFlix"'},
+        )
+
+    # Login page
+    @app.route("/login")
+    def login_page():
+        return render_template("login.html")
+
+    # Token auth endpoint
+    @app.route("/api/auth/token", methods=["POST"])
+    def auth_token():
+        data = request.get_json(silent=True) or {}
+        token = data.get("token", "").strip()
+        if not token:
+            return jsonify({"ok": False, "error": "Token required"}), 400
+        import cache
+        row = cache.validate_token(token)
+        if not row:
+            return jsonify({"ok": False, "error": "Invalid or expired token"}), 401
+        resp = jsonify({"ok": True})
+        resp.set_cookie(
+            "slothflix_token", token,
+            max_age=60 * 60 * 24 * int(os.getenv("TOKEN_EXPIRY_DAYS", "7")),
+            httponly=True,
+            samesite="Lax",
+        )
+        return resp
 
     # Init cache DB
     import cache
@@ -50,7 +115,6 @@ def create_app():
     # Serve frontend
     @app.route("/")
     def index():
-        from flask import render_template
         # Pass auth header so JS fetch calls can authenticate
         auth_header = ""
         auth = request.authorization
