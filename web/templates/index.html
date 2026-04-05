@@ -47,6 +47,8 @@ a{color:inherit;text-decoration:none}
 .card-meta{padding:0 8px 8px;font-size:10px;color:#888;display:flex;justify-content:space-between}
 .card .seed-badge{color:#46d369}
 .card-placeholder{width:100%;height:250px;background:linear-gradient(135deg,#1a1a1a,#2a2a2a);display:flex;align-items:center;justify-content:center;font-size:36px;color:#333}
+.card[data-src] img{opacity:0;transition:opacity .3s}
+.card img.loaded{opacity:1}
 
 /* Detail Panel */
 .overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:200;opacity:0;pointer-events:none;transition:opacity .3s}
@@ -272,9 +274,10 @@ function renderRow(title, items) {
   items.forEach(item => {
     const card = document.createElement('div');
     card.className = 'card';
+    const posterUrl = `${API}/api/poster/${encodeURIComponent(item.title)}`;
+    card.setAttribute('data-src', posterUrl);
     card.innerHTML = `
-      <img src="${API}/api/poster/${encodeURIComponent(item.title)}" loading="lazy"
-           onerror="this.onerror=null;this.src='/static/poster_default.png'">
+      <img src="" alt="">
       <div class="card-title" title="${esc(item.title)}">${esc(item.title)}</div>
       <div class="card-meta">
         <span>${item.size || ''}</span>
@@ -282,8 +285,53 @@ function renderRow(title, items) {
       </div>`;
     card.onclick = () => openDetail(item);
     row.appendChild(card);
+    posterObserver.observe(card);
   });
 }
+
+// --- Lazy poster loading with concurrency limit ---
+const MAX_CONCURRENT_POSTERS = 4;
+let _posterActive = 0;
+const _posterQueue = [];
+
+function _drainPosterQueue() {
+  while (_posterActive < MAX_CONCURRENT_POSTERS && _posterQueue.length) {
+    const card = _posterQueue.shift();
+    _loadPoster(card);
+  }
+}
+
+function _loadPoster(card) {
+  const src = card.getAttribute('data-src');
+  if (!src) return;
+  card.removeAttribute('data-src');
+  _posterActive++;
+  const img = card.querySelector('img');
+  const tempImg = new Image();
+  tempImg.onload = () => {
+    img.src = tempImg.src;
+    img.classList.add('loaded');
+    _posterActive--;
+    _drainPosterQueue();
+  };
+  tempImg.onerror = () => {
+    img.src = '/static/poster_default.png';
+    img.classList.add('loaded');
+    _posterActive--;
+    _drainPosterQueue();
+  };
+  tempImg.src = src;
+}
+
+const posterObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    const card = entry.target;
+    posterObserver.unobserve(card);
+    _posterQueue.push(card);
+  }
+  _drainPosterQueue();
+}, { rootMargin: '200px' });
 
 // --- Search ---
 async function doSearch() {

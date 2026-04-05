@@ -106,6 +106,16 @@ def create_app():
     app.register_blueprint(api_bp)
     app.register_blueprint(stream_bp)
 
+    # Favicon
+    @app.route("/favicon.ico")
+    def favicon():
+        from flask import send_from_directory
+        return send_from_directory(
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), ""),
+            "sloth_logo.png",
+            mimetype="image/png",
+        )
+
     # Serve static files
     @app.route("/static/<path:filename>")
     def static_files(filename):

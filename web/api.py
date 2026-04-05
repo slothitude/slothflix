@@ -160,6 +160,22 @@ def torrent_files():
         return jsonify({"error": str(e)}), 500
 
 
+def _downscale_poster(blob, max_w=120, max_h=170, quality=60):
+    """Downscale poster image to small thumbnail for cards."""
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(blob))
+        img.thumbnail((max_w, max_h), Image.LANCZOS)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return blob
+
+
 @api_bp.route("/poster/<path:title>")
 def poster(title):
     """Proxy poster image via SearXNG image search with fallback."""
@@ -187,7 +203,7 @@ def poster(title):
                 try:
                     img_resp = req.get(img_url, timeout=8)
                     if img_resp.status_code == 200 and len(img_resp.content) > 1000:
-                        blob = img_resp.content
+                        blob = _downscale_poster(img_resp.content)
                         cache.save_poster(title, blob, 0, 0)
                         return Response(blob, mimetype="image/jpeg")
                 except Exception:
