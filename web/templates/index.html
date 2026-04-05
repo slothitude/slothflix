@@ -927,9 +927,11 @@ function switchTab(tab) {
   container.innerHTML = '';
   if (tab === 'movies') {
     hero.style.display = '';
+    container.style.paddingTop = '';
     loadCatalog();
   } else {
     hero.style.display = 'none';
+    container.style.paddingTop = '70px';
     loadGameCatalog();
   }
 }
