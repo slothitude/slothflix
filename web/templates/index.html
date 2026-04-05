@@ -78,14 +78,29 @@ a{color:inherit;text-decoration:none}
 .stream-bar .seeds{color:#aaa;font-size:13px}
 .stream-bar .btn-stop{background:#333;color:#fff;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-size:13px}
 
+/* Splash Screen */
+.splash{position:fixed;top:0;left:0;right:0;bottom:0;background:#141414;z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;transition:opacity .6s}
+.splash.fade-out{opacity:0;pointer-events:none}
+.splash img{width:220px;animation:splashPulse 2s ease-in-out infinite}
+.splash .splash-sub{color:#666;font-size:14px;letter-spacing:2px}
+@keyframes splashPulse{0%,100%{opacity:.7;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+
 /* Video Player Overlay */
 .player-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:300;display:none;align-items:center;justify-content:center;flex-direction:column}
 .player-overlay.open{display:flex}
 .player-overlay video{width:100%;height:100%;object-fit:contain}
 .player-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:36px;cursor:pointer;z-index:301;opacity:.7;transition:opacity .2s}
 .player-close:hover{opacity:1}
-.player-loading{position:absolute;display:flex;flex-direction:column;align-items:center;gap:12px;color:#ccc;font-size:16px}
+.player-loading{position:absolute;display:flex;flex-direction:column;align-items:center;gap:16px;color:#ccc;font-size:16px}
 .player-loading.hidden{display:none}
+.dl-stats{display:flex;gap:28px;margin-top:8px;font-size:14px}
+.dl-stat{display:flex;flex-direction:column;align-items:center;gap:4px}
+.dl-val{font-size:22px;font-weight:700;color:#e5e5e5}
+.dl-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px}
+.dl-progress-wrap{width:320px;margin-top:8px}
+.dl-progress-bar{width:100%;height:4px;background:#333;border-radius:2px;overflow:hidden}
+.dl-progress-bar .fill{height:100%;background:#e50914;transition:width .5s;width:0}
+.dl-pct{text-align:center;font-size:13px;color:#888;margin-top:6px}
 
 /* Spinner */
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid #444;border-top-color:#e50914;border-radius:50%;animation:spin .6s linear infinite}
@@ -104,6 +119,12 @@ a{color:inherit;text-decoration:none}
 </style>
 </head>
 <body>
+
+<!-- Splash Screen -->
+<div class="splash" id="splash">
+  <img src="/static/sloth_logo.png" alt="SlothFlix">
+  <div class="splash-sub">LOADING</div>
+</div>
 
 <!-- Nav -->
 <nav class="nav" id="nav">
@@ -132,8 +153,18 @@ a{color:inherit;text-decoration:none}
   <button class="player-close" onclick="closePlayer()">&times;</button>
   <video id="videoPlayer" controls autoplay></video>
   <div class="player-loading" id="playerLoading">
+    <img src="/static/sloth_logo.png" alt="" style="width:120px;opacity:.5">
     <div class="spinner" style="width:40px;height:40px"></div>
-    <div id="playerStatus">Buffering...</div>
+    <div id="playerStatus">Starting torrent...</div>
+    <div class="dl-stats" id="dlStats" style="display:none">
+      <div class="dl-stat"><span class="dl-val" id="dlSpeed">--</span><span class="dl-label">Speed</span></div>
+      <div class="dl-stat"><span class="dl-val" id="dlSeeds">--</span><span class="dl-label">Seeds</span></div>
+      <div class="dl-stat"><span class="dl-val" id="dlPeers">--</span><span class="dl-label">Peers</span></div>
+    </div>
+    <div class="dl-progress-wrap" id="dlProgressWrap" style="display:none">
+      <div class="dl-progress-bar"><div class="fill" id="dlFill"></div></div>
+      <div class="dl-pct" id="dlPct">0%</div>
+    </div>
   </div>
 </div>
 
@@ -173,6 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function dismissSplash() {
+  const splash = document.getElementById('splash');
+  splash.classList.add('fade-out');
+  setTimeout(() => splash.remove(), 700);
+}
+
 // --- IP Check ---
 async function checkIP() {
   try {
@@ -192,6 +229,9 @@ async function loadCatalog() {
   ]);
   renderRow('Top Movies', movies);
   renderRow('Top TV Shows', tv);
+
+  // Dismiss splash once catalog loads
+  dismissSplash();
 
   // Set hero to first movie
   if (movies.length) {
@@ -397,6 +437,8 @@ async function playItem(item, fileId) {
     // Start playback
     status.textContent = 'Starting playback...';
     loading.classList.add('hidden');
+    document.getElementById('dlStats').style.display = 'none';
+    document.getElementById('dlProgressWrap').style.display = 'none';
     video.src = '/play/' + currentSessionId;
     video.play().catch(() => {});
   } catch(e) {
@@ -405,6 +447,11 @@ async function playItem(item, fileId) {
 }
 
 async function waitForBuffer(sessionId) {
+  const dlStats = document.getElementById('dlStats');
+  const dlProgressWrap = document.getElementById('dlProgressWrap');
+  dlStats.style.display = 'flex';
+  dlProgressWrap.style.display = 'block';
+
   return new Promise((resolve) => {
     const check = async () => {
       try {
@@ -412,9 +459,18 @@ async function waitForBuffer(sessionId) {
         const d = await r.json();
         if (!d.active) { resolve(); return; }
         updateStreamUI(null, d.progress, d.download_rate, d.seeds);
+
+        const pct = d.progress || 0;
         document.getElementById('playerStatus').textContent =
-          'Buffering... ' + (d.progress || 0).toFixed(1) + '%';
-        if ((d.progress || 0) >= 5) {
+          pct >= 5 ? 'Starting playback...' : 'Buffering...';
+        document.getElementById('dlFill').style.width = pct + '%';
+        document.getElementById('dlPct').textContent = pct.toFixed(1) + '%';
+        document.getElementById('dlSpeed').textContent =
+          d.download_rate ? (d.download_rate >= 1 ? d.download_rate.toFixed(1) + ' MB/s' : (d.download_rate * 1024).toFixed(0) + ' KB/s') : '--';
+        document.getElementById('dlSeeds').textContent = d.seeds || '--';
+        document.getElementById('dlPeers').textContent = d.peers || '--';
+
+        if (pct >= 5) {
           resolve();
         } else {
           setTimeout(check, 1500);
