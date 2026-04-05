@@ -109,12 +109,22 @@ def create_app():
     # Favicon
     @app.route("/favicon.ico")
     def favicon():
-        from flask import send_from_directory
-        return send_from_directory(
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), ""),
-            "sloth_logo.png",
-            mimetype="image/png",
-        )
+        from flask import Response as _Resp
+        logo = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sloth_logo.png")
+        if os.path.exists(logo):
+            with open(logo, "rb") as f:
+                blob = f.read()
+            try:
+                from PIL import Image
+                import io
+                img = Image.open(io.BytesIO(blob))
+                img.thumbnail((32, 32), Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format="ICO", sizes=[(16, 16), (32, 32)])
+                return _Resp(buf.getvalue(), mimetype="image/x-icon")
+            except Exception:
+                return _Resp(blob, mimetype="image/png")
+        return "", 404
 
     # Serve static files
     @app.route("/static/<path:filename>")
