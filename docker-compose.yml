@@ -85,6 +85,7 @@ services:
   emulatorjs:
     image: linuxserver/emulatorjs:latest
     container_name: emulatorjs
+    platform: linux/arm64
     environment:
       - PUID=1000
       - PGID=1000
