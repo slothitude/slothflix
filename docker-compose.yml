@@ -83,7 +83,7 @@ services:
     restart: unless-stopped
 
   emulatorjs:
-    image: lscr.io/linuxserver/emulatorjs:latest
+    image: linuxserver/emulatorjs:latest
     container_name: emulatorjs
     environment:
       - PUID=1000
