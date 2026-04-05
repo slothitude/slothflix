@@ -442,18 +442,33 @@ def vimm_download(game_id):
 
 @api_bp.route("/vimm/cover/<int:game_id>")
 def vimm_cover_proxy(game_id):
-    """Proxy cover art from vimm.net."""
+    """Proxy cover art from vimm.net with local caching."""
+    import hashlib
+    cache_dir = os.path.join(os.getenv("CACHE_DB_PATH", "/app/data/cache.db"), "..", "covers")
+    cache_dir = os.path.normpath(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_file = os.path.join(cache_dir, f"{game_id}.jpg")
+
+    # Serve from cache if available
+    if os.path.isfile(cache_file) and os.path.getsize(cache_file) > 100:
+        return send_file(cache_file, mimetype="image/jpeg")
+
     try:
         import requests as req
-        # Try box first, then cart
         for img_type in ("box", "cart"):
-            resp = req.get(
-                f"https://dl.vimm.net/image.php?type={img_type}&id={game_id}",
-                timeout=20,
-            )
-            if resp.status_code == 200 and len(resp.content) > 100:
-                ct = resp.headers.get("Content-Type", "image/jpeg")
-                return Response(resp.content, mimetype=ct)
+            try:
+                resp = req.get(
+                    f"https://dl.vimm.net/image.php?type={img_type}&id={game_id}",
+                    timeout=30,
+                )
+                if resp.status_code == 200 and len(resp.content) > 100:
+                    ct = resp.headers.get("Content-Type", "image/jpeg")
+                    # Cache to disk
+                    with open(cache_file, "wb") as f:
+                        f.write(resp.content)
+                    return Response(resp.content, mimetype=ct)
+            except Exception:
+                continue
         return "", 404
     except Exception:
         return "", 404

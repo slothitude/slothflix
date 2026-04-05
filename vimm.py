@@ -225,7 +225,7 @@ def download_rom(game_id, media_id, dest_dir, filename=None):
         dl_resp = _session.get(
             DL_BASE,
             params={"mediaId": str(media_id)},
-            timeout=60,
+            timeout=120,
             allow_redirects=True,
         )
         dl_resp.raise_for_status()
