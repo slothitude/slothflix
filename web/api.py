@@ -221,6 +221,13 @@ def blurb(title):
     return jsonify({"blurb": "", "title": clean})
 
 
+@api_bp.route("/trailers")
+def trailers():
+    """Return cached YouTube trailer IDs for pre-roll playback."""
+    cached = cache.load_trailers()
+    return jsonify(cached)
+
+
 @api_bp.route("/vlc/open", methods=["POST"])
 def vlc_open():
     """Open a file path in the VLC container."""

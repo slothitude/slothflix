@@ -1,6 +1,7 @@
 """SlothFlix Flask web application."""
 
 import os
+import threading
 from flask import Flask
 from .api import api_bp
 from .stream import stream_bp
@@ -37,4 +38,20 @@ def create_app():
         from flask import render_template
         return render_template("index.html")
 
+    # Trailer pre-roll: refresh on startup, then daily
+    _schedule_trailer_refresh()
+
     return app
+
+
+def _schedule_trailer_refresh():
+    import trailers
+    threading.Thread(target=trailers.refresh_trailers_if_stale, daemon=True).start()
+
+    def _daily():
+        while True:
+            import time
+            time.sleep(86400)
+            trailers.refresh_trailers_if_stale()
+
+    threading.Thread(target=_daily, daemon=True).start()

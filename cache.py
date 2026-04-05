@@ -44,6 +44,13 @@ def init_db():
             source_url TEXT,
             updated_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS trailers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            youtube_id TEXT UNIQUE,
+            thumbnail_url TEXT,
+            updated_at TEXT
+        );
     """)
     con.close()
 
@@ -155,3 +162,28 @@ def fetch_blurb(clean_t):
     except Exception:
         pass
     return None
+
+
+# --- trailers ---
+
+def save_trailers(trailers_list):
+    now = datetime.utcnow().isoformat()
+    con = _conn()
+    with con:
+        con.execute("DELETE FROM trailers")
+        for t in trailers_list:
+            con.execute(
+                "INSERT OR REPLACE INTO trailers (title, youtube_id, thumbnail_url, updated_at) "
+                "VALUES (?, ?, ?, ?)",
+                (t.get("title", ""), t["youtube_id"], t.get("thumbnail_url", ""), now),
+            )
+    con.close()
+
+
+def load_trailers():
+    con = _conn()
+    rows = con.execute(
+        "SELECT title, youtube_id, thumbnail_url, updated_at FROM trailers ORDER BY id"
+    ).fetchall()
+    con.close()
+    return [dict(r) for r in rows]

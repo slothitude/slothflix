@@ -9,7 +9,8 @@ services:
       - downloads:/downloads
     ports:
       - "8180:8180"      # SlothFlix
-      - "8890:8080"      # SearXNG      - "9191:9191"      # Transmission RPC
+      - "8890:8080"      # SearXNG
+      - "9191:9191"      # Transmission RPC
     environment:
       - OPENVPN_PROVIDER=PUREVPN
       - OPENVPN_USERNAME=purevpn0s9075328

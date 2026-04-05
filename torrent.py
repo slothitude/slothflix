@@ -131,13 +131,13 @@ def start_torrent(magnet_uri, save_path=None, log_callback=None, file_id=None):
     save_path = save_path or DOWNLOAD_DIR
     os.makedirs(save_path, exist_ok=True)
 
-    # Stop any previous torrent and wipe old downloads
-    _stop_lt_torrent()
+    _selected_file_path = None
+
+    # Wipe old downloads (get_torrent_files handles stopping previous torrent)
     _cleanup_downloads(save_path)
 
-    # Ensure torrent is loaded
+    # Ensure torrent is loaded and get file list
     files = get_torrent_files(magnet_uri, save_path, log_callback)
-
     if not files:
         raise RuntimeError("No media files found in torrent")
 
@@ -163,9 +163,10 @@ def start_torrent(magnet_uri, save_path=None, log_callback=None, file_id=None):
     handle.set_sequential_download(True)
     handle.resume()
 
-    # Build file path
+    # Build file path — file_path() already includes torrent name as parent for
+    # multi-file torrents, so we only prepend save_path
     file_path = os.path.join(
-        save_path, torrent_info.name(), torrent_info.files().file_path(selected["id"])
+        save_path, torrent_info.files().file_path(selected["id"])
     )
     _selected_file_path = file_path
 

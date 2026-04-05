@@ -91,7 +91,9 @@ a{color:inherit;text-decoration:none}
 .player-overlay video{width:100%;height:100%;object-fit:contain}
 .player-close{position:absolute;top:16px;right:20px;background:none;border:none;color:#fff;font-size:36px;cursor:pointer;z-index:301;opacity:.7;transition:opacity .2s}
 .player-close:hover{opacity:1}
-.player-loading{position:absolute;display:flex;flex-direction:column;align-items:center;gap:16px;color:#ccc;font-size:16px}
+.trailer-iframe{position:absolute;top:0;left:0;width:100%;height:100%;z-index:302;transition:opacity .8s}
+.trailer-iframe.fade-out{opacity:0;pointer-events:none}
+.player-loading{position:absolute;z-index:303;display:flex;flex-direction:column;align-items:center;gap:16px;color:#ccc;font-size:16px;pointer-events:none}
 .player-loading.hidden{display:none}
 .dl-stats{display:flex;gap:28px;margin-top:8px;font-size:14px}
 .dl-stat{display:flex;flex-direction:column;align-items:center;gap:4px}
@@ -151,7 +153,8 @@ a{color:inherit;text-decoration:none}
 <!-- Video Player -->
 <div class="player-overlay" id="playerOverlay">
   <button class="player-close" onclick="closePlayer()">&times;</button>
-  <video id="videoPlayer" controls autoplay></video>
+  <iframe class="trailer-iframe" id="trailerIframe" style="display:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>
+  <video id="videoPlayer" controls autoplay style="position:relative;z-index:1"></video>
   <div class="player-loading" id="playerLoading">
     <img src="/static/sloth_logo.png" alt="" style="width:120px;opacity:.5">
     <div class="spinner" style="width:40px;height:40px"></div>
@@ -191,6 +194,9 @@ a{color:inherit;text-decoration:none}
 const API = '';
 let currentHero = null;
 let streamPollInterval = null;
+let trailerPlaylist = [];
+let trailerIndex = 0;
+let trailerActive = false;
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -389,6 +395,7 @@ function closePlayer() {
   const video = document.getElementById('videoPlayer');
   video.pause();
   video.src = '';
+  stopTrailerPreRoll();
   overlay.classList.remove('open');
 }
 
@@ -408,6 +415,9 @@ async function playItem(item, fileId) {
   document.getElementById('streamBar').classList.add('open');
   updateStreamUI('Starting...', 0);
 
+  // Start trailer pre-roll immediately
+  startTrailerPreRoll();
+
   try {
     const body = {magnet: item.magnet};
     if (fileId !== undefined) body.file_id = fileId;
@@ -421,6 +431,7 @@ async function playItem(item, fileId) {
 
     if (d.error) {
       status.textContent = 'Error: ' + d.error;
+      stopTrailerPreRoll();
       return;
     }
 
@@ -434,7 +445,8 @@ async function playItem(item, fileId) {
     status.textContent = 'Buffering...';
     await waitForBuffer(d.session_id);
 
-    // Start playback
+    // Fade out trailer, start movie playback
+    fadeOutTrailer();
     status.textContent = 'Starting playback...';
     loading.classList.add('hidden');
     document.getElementById('dlStats').style.display = 'none';
@@ -443,7 +455,59 @@ async function playItem(item, fileId) {
     video.play().catch(() => {});
   } catch(e) {
     status.textContent = 'Error: ' + e.message;
+    stopTrailerPreRoll();
   }
+}
+
+// --- Trailer Pre-Roll ---
+async function startTrailerPreRoll() {
+  const iframe = document.getElementById('trailerIframe');
+  try {
+    // Check if YouTube is reachable before embedding
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('YouTube unreachable'));
+      setTimeout(() => reject(new Error('timeout')), 5000);
+      img.src = 'https://www.youtube.com/favicon.ico?' + Date.now();
+    });
+
+    const r = await fetch(API + '/api/trailers');
+    trailerPlaylist = await r.json();
+  } catch(e) { return; }
+  if (!trailerPlaylist.length) return;
+  trailerIndex = 0;
+  trailerActive = true;
+  iframe.style.display = 'block';
+  iframe.classList.remove('fade-out');
+  loadTrailer(0);
+}
+
+function loadTrailer(index) {
+  if (!trailerActive || index >= trailerPlaylist.length) return;
+  trailerIndex = index;
+  const ytId = trailerPlaylist[index].youtube_id;
+  const iframe = document.getElementById('trailerIframe');
+  // Enable autoplay + loop playlist via YouTube embed API
+  iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&enablejsapi=1&origin=${location.origin}&playlist=${trailerPlaylist.map(t=>t.youtube_id).join(',')}`;
+}
+
+function fadeOutTrailer() {
+  trailerActive = false;
+  const iframe = document.getElementById('trailerIframe');
+  iframe.classList.add('fade-out');
+  setTimeout(() => {
+    iframe.src = '';
+    iframe.style.display = 'none';
+    iframe.classList.remove('fade-out');
+  }, 900);
+}
+
+function stopTrailerPreRoll() {
+  trailerActive = false;
+  const iframe = document.getElementById('trailerIframe');
+  iframe.src = '';
+  iframe.style.display = 'none';
 }
 
 async function waitForBuffer(sessionId) {

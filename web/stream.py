@@ -100,7 +100,29 @@ def play_file(session_id):
         return "No active stream", 404
 
     file_path = status.get("file_path")
-    if not file_path or not os.path.exists(file_path):
+    if not file_path:
+        return "File not found", 404
+
+    # Retry loop — file may take time to appear on disk after buffer target
+    import time
+    import logging
+    _log = logging.getLogger(__name__)
+    _log.info("play_file: waiting for %s", file_path)
+    for i in range(60):
+        if os.path.exists(file_path):
+            _log.info("play_file: file found after %.1fs", i * 0.5)
+            break
+        # Also check with .!qB suffix (qBittorrent partial downloads)
+        part_path = file_path + ".!qB"
+        if os.path.exists(part_path):
+            _log.info("play_file: found partial file .!qB after %.1fs", i * 0.5)
+            file_path = part_path
+            break
+        time.sleep(0.5)
+    else:
+        dl_dir = os.getenv("DOWNLOAD_DIR", "/downloads")
+        _log.error("play_file: %s not found after 30s. Contents of %s: %s",
+                    file_path, dl_dir, os.listdir(dl_dir) if os.path.isdir(dl_dir) else "dir missing")
         return f"File not found: {file_path}", 404
 
     ext = os.path.splitext(file_path)[1].lower()
@@ -158,6 +180,8 @@ def play_file(session_id):
     # MKV/other: remux to fragmented MP4 via ffmpeg (no re-encoding)
     cmd = [
         "ffmpeg",
+        "-err_detect", "ignore_err",
+        "-fflags", "+genpts+discardcorrupt",
         "-i", file_path,
         "-c", "copy",
         "-f", "mp4",
@@ -166,7 +190,9 @@ def play_file(session_id):
         "pipe:1",
     ]
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    import logging
+    _log = logging.getLogger(__name__)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     def generate():
         try:
@@ -177,6 +203,9 @@ def play_file(session_id):
                 yield chunk
         finally:
             proc.stdout.close()
+            stderr_output = proc.stderr.read().decode(errors="replace").strip()
+            if stderr_output:
+                _log.warning("ffmpeg stderr: %s", stderr_output)
             proc.terminate()
             proc.wait()
 
