@@ -110,6 +110,12 @@ a{color:inherit;text-decoration:none}
 .spinner{display:inline-block;width:20px;height:20px;border:2px solid #444;border-top-color:#e50914;border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* Play Ready Overlay */
+.play-ready-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:305;display:none;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;background:rgba(0,0,0,.3)}
+.play-btn-big{width:80px;height:80px;border-radius:50%;background:rgba(229,9,20,.85);display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff;transition:transform .2s,background .2s}
+.play-btn-big:hover{transform:scale(1.1);background:rgba(244,6,18,.95)}
+.play-ready-title{margin-top:16px;font-size:18px;color:#fff;text-shadow:1px 1px 4px rgba(0,0,0,.8);max-width:500px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 /* Next Episode */
 .next-ep-overlay{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:310;background:rgba(0,0,0,.85);border-radius:8px;padding:24px 36px;text-align:center;max-width:400px}
 .next-ep-title{font-size:16px;color:#ccc;margin-bottom:12px}
@@ -178,6 +184,10 @@ a{color:inherit;text-decoration:none}
       <div class="dl-progress-bar"><div class="fill" id="dlFill"></div></div>
       <div class="dl-pct" id="dlPct">0%</div>
     </div>
+  </div>
+  <div class="play-ready-overlay" id="playReadyOverlay" style="display:none" onclick="startPlayback()">
+    <div class="play-btn-big">&#9654;</div>
+    <div class="play-ready-title" id="playReadyTitle"></div>
   </div>
   <div class="next-ep-overlay" id="nextEpOverlay" style="display:none">
     <div class="next-ep-title" id="nextEpTitle"></div>
@@ -487,6 +497,7 @@ function closePlayer() {
   overlay.classList.remove('open');
   if (nextEpisodeTimer) { clearInterval(nextEpisodeTimer); nextEpisodeTimer = null; }
   document.getElementById('nextEpOverlay').style.display = 'none';
+  document.getElementById('playReadyOverlay').style.display = 'none';
 }
 
 async function playItem(item, fileId) {
@@ -536,18 +547,43 @@ async function playItem(item, fileId) {
     status.textContent = 'Buffering...';
     await waitForBuffer(d.session_id);
 
-    // Fade out trailer, start movie playback
-    fadeOutTrailer();
-    status.textContent = 'Starting playback...';
-    loading.classList.add('hidden');
-    document.getElementById('dlStats').style.display = 'none';
-    document.getElementById('dlProgressWrap').style.display = 'none';
-    video.src = '/play/' + currentSessionId;
-    video.play().catch(() => {});
+    // If trailer still playing, show play button overlay and wait
+    if (trailerActive) {
+      loading.classList.add('hidden');
+      document.getElementById('dlStats').style.display = 'none';
+      document.getElementById('dlProgressWrap').style.display = 'none';
+      showPlayReadyOverlay();
+      return;
+    }
+
+    startPlayback();
   } catch(e) {
     status.textContent = 'Error: ' + e.message;
     stopTrailerPreRoll();
   }
+}
+
+function showPlayReadyOverlay() {
+  const overlay = document.getElementById('playReadyOverlay');
+  const title = document.getElementById('playReadyTitle');
+  let displayName = currentHero ? currentHero.title : '';
+  if (currentFileId !== null && currentFileList.length) {
+    const f = currentFileList.find(f => f.id === currentFileId);
+    if (f) displayName = f.name;
+  }
+  title.textContent = displayName;
+  overlay.style.display = 'flex';
+}
+
+function startPlayback() {
+  const video = document.getElementById('videoPlayer');
+  fadeOutTrailer();
+  document.getElementById('playerLoading').classList.add('hidden');
+  document.getElementById('dlStats').style.display = 'none';
+  document.getElementById('dlProgressWrap').style.display = 'none';
+  document.getElementById('playReadyOverlay').style.display = 'none';
+  video.src = '/play/' + currentSessionId;
+  video.play().catch(() => {});
 }
 
 // --- Trailer Pre-Roll (YouTube IFrame Player API) ---
@@ -567,6 +603,12 @@ function loadYTApi() {
 function onTrailerStateChange(event) {
   if (event.data === YT.PlayerState.ENDED) {
     if (trailerDoneResolve) { trailerDoneResolve(); trailerDoneResolve = null; }
+    // Auto-start playback if play ready overlay is showing
+    const playReady = document.getElementById('playReadyOverlay');
+    if (playReady.style.display !== 'none') {
+      startPlayback();
+      return;
+    }
     if (trailerActive && trailerIndex + 1 < trailerPlaylist.length) {
       trailerIndex++;
       trailerDone = new Promise(r => { trailerDoneResolve = r; });
@@ -592,6 +634,11 @@ async function startTrailerPreRoll() {
 
   trailerIndex = 0;
   trailerActive = true;
+  // Shuffle playlist
+  for (let i = trailerPlaylist.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [trailerPlaylist[i], trailerPlaylist[j]] = [trailerPlaylist[j], trailerPlaylist[i]];
+  }
   wrapper.style.display = 'block';
   wrapper.classList.remove('fade-out');
 
@@ -606,10 +653,10 @@ async function startTrailerPreRoll() {
     width: '100%',
     height: '100%',
     videoId: trailerPlaylist[0].youtube_id,
-    playerVars: { autoplay: 1, mute: 1, controls: 0, modestbranding: 1, rel: 0 },
+    playerVars: { autoplay: 1, mute: 0, controls: 0, modestbranding: 1, rel: 0 },
     events: {
       onStateChange: onTrailerStateChange,
-      onReady: e => e.target.playVideo()
+      onReady: e => { e.target.setVolume(100); e.target.playVideo(); }
     }
   });
 }
@@ -660,7 +707,6 @@ async function waitForBuffer(sessionId) {
         document.getElementById('dlPeers').textContent = d.peers || '--';
 
         if (pct >= 10) {
-          await trailerDone;
           resolve();
         } else {
           setTimeout(check, 1500);
