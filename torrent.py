@@ -30,6 +30,10 @@ def _get_lt_session():
             "listen_interfaces": "0.0.0.0:6881",
             "enable_dht": True,
             "enable_lsd": True,
+            "active_downloads": 1,
+            "active_seeds": 1,
+            "active_limit": 2,
+            "connections_limit": 50,
         }
         _lt_session = lt.session(settings)
         _lt_session.add_dht_router("router.bittorrent.com", 6881)
