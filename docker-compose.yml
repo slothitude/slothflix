@@ -113,7 +113,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.chat.rule=PathPrefix(`/chat`)"
+      - "traefik.http.routers.chat.rule=Host(`chat.slothitude.giize.com`)"
       - "traefik.http.routers.chat.entrypoints=websecure"
       - "traefik.http.routers.chat.tls=true"
       - "traefik.http.services.chat.loadbalancer.server.port=8080"
@@ -135,7 +135,7 @@ services:
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mail.rule=PathPrefix(`/mail`)"
+      - "traefik.http.routers.mail.rule=Host(`mail.slothitude.giize.com`)"
       - "traefik.http.routers.mail.entrypoints=websecure"
       - "traefik.http.routers.mail.tls=true"
       - "traefik.http.services.mail.loadbalancer.server.port=80"
