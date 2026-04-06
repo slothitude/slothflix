@@ -7,9 +7,11 @@ services:
       - "80:80"
       - "443:443"
       - "8888:8888"
+    environment:
+      - DYNU_API_KEY=V4W52UU4ZeZ374464U46ecbY6b7VX366
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /opt/traefik/certs:/certs:ro
+      - /opt/traefik/letsencrypt:/letsencrypt
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
@@ -19,8 +21,10 @@ services:
       - "--entrypoints.traefik.address=:8888"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--providers.file.filename=/certs/cert.yaml"
-      - "--providers.file.watch=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=Slothitudegames@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=dynu"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=30"
 
   transmission:
     image: haugene/transmission-openvpn
@@ -49,6 +53,9 @@ services:
       - "traefik.http.routers.slothflix.rule=PathPrefix(`/`)"
       - "traefik.http.routers.slothflix.entrypoints=websecure"
       - "traefik.http.routers.slothflix.tls=true"
+      - "traefik.http.routers.slothflix.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.slothflix.tls.domains[0].main=*.slothitude.giize.com"
+      - "traefik.http.routers.slothflix.tls.domains[0].sans=slothitude.giize.com"
       - "traefik.http.services.slothflix.loadbalancer.server.port=8180"
       - "traefik.http.routers.slothflix.service=slothflix"
 
@@ -102,6 +109,7 @@ services:
       - "traefik.http.routers.emu.rule=PathPrefix(`/emu`)"
       - "traefik.http.routers.emu.entrypoints=websecure"
       - "traefik.http.routers.emu.tls=true"
+      - "traefik.http.routers.emu.tls.certresolver=letsencrypt"
       - "traefik.http.services.emu.loadbalancer.server.port=3000"
       - "traefik.http.routers.emu.service=emu"
 
@@ -120,6 +128,7 @@ services:
       - "traefik.http.routers.chat.rule=Host(`chat.slothitude.giize.com`)"
       - "traefik.http.routers.chat.entrypoints=websecure"
       - "traefik.http.routers.chat.tls=true"
+      - "traefik.http.routers.chat.tls.certresolver=letsencrypt"
       - "traefik.http.services.chat.loadbalancer.server.port=8080"
       - "traefik.http.routers.chat.service=chat"
 
@@ -145,6 +154,7 @@ services:
       - "traefik.http.routers.mail.rule=Host(`mail.slothitude.giize.com`)"
       - "traefik.http.routers.mail.entrypoints=websecure"
       - "traefik.http.routers.mail.tls=true"
+      - "traefik.http.routers.mail.tls.certresolver=letsencrypt"
       - "traefik.http.services.mail.loadbalancer.server.port=80"
       - "traefik.http.routers.mail.service=mail"
 
