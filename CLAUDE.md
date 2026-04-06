@@ -72,14 +72,14 @@ No tests, linter, or CI. Manual testing only — build and visit the UI.
 
 ## Deployment (Oracle Cloud)
 
-Deployed on Oracle Cloud free tier (1GB RAM, 1 vCPU). `setup-oracle.sh` adds 2GB swap and opens firewall ports. The server uses Traefik as reverse proxy with HTTPS (Let's Encrypt via acme.sh + Dynu DNS challenge).
+Deployed on Oracle Cloud free tier (1GB RAM, 1 vCPU, 4GB swap). Traefik v3 reverse proxy with auto-renewing Let's Encrypt wildcard certs via DNS-01 challenge (Dynu API). Dynu wildcard alias enabled — `*.slothitude.giize.com` resolves to server IP. New services need only Traefik Docker labels, No per-service DNS records needed.
 
 ```bash
 # Remote rebuild
 ssh -i ~/.oci/slothflix_ssh_key ubuntu@<server-ip> "cd /home/ubuntu/slothflix && docker compose up -d --build"
 
 # Check containers
-ssh -i ~/.oci/slothflix_ssh_key ubuntu@<server-ip> "docker compose -f /home/ubuntu/slothflix/docker-compose.yml ps"
+ssh -i ~/.oci/slothflix_ssh_key ubuntu@<server-ip> "docker ps --format '{{.Names}} {{.Status}}'"
 ```
 
 ## External Requirements
