@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libtorrent-rasterbar-dev ffmpeg curl \
+    libtorrent-rasterbar-dev ffmpeg curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -21,10 +21,8 @@ COPY static/ static/
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# Create data directories
+# Create data directories with correct ownership
 RUN mkdir -p /app/data /downloads && chown -R slothflix:slothflix /app /downloads
-
-USER slothflix
 
 EXPOSE 8180
 CMD ["./entrypoint.sh"]
