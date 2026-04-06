@@ -679,8 +679,7 @@ async function playItem(item, fileId) {
   }
 
   // All retries exhausted
-  const loading = document.getElementById('playerLoading');
-  loading.classList.add('hidden');
+  document.getElementById('playerLoading').classList.add('hidden');
   stopTrailerPreRoll();
   showPlayerError(lastError ? lastError.message : 'Unknown error');
 }
