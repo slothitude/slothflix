@@ -2,11 +2,8 @@ FROM python:3.11-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libtorrent-rasterbar-dev ffmpeg curl gosu \
+    libtorrent-rasterbar-dev ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN groupadd -r slothflix && useradd -r -g slothflix -d /app slothflix
 
 WORKDIR /app
 
@@ -21,8 +18,8 @@ COPY static/ static/
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 
-# Create data directories with correct ownership
-RUN mkdir -p /app/data /downloads && chown -R slothflix:slothflix /app /downloads
+# Create data directories
+RUN mkdir -p /app/data /downloads
 
 EXPOSE 8180
 CMD ["./entrypoint.sh"]
