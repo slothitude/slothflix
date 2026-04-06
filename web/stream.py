@@ -3,7 +3,7 @@
 import os
 import subprocess
 
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 
 stream_bp = Blueprint("stream", __name__)
 
@@ -28,11 +28,11 @@ def stream_file(session_id):
 
     status = torrent.get_stream_status()
     if not status.get("active"):
-        return "No active stream", 404
+        return jsonify(error="No active stream"), 404
 
     file_path = status.get("file_path")
     if not file_path or not os.path.exists(file_path):
-        return f"File not found: {file_path}", 404
+        return jsonify(error=f"File not found: {file_path}"), 404
 
     file_size = os.path.getsize(file_path)
     ext = os.path.splitext(file_path)[1].lower()
@@ -97,11 +97,11 @@ def play_file(session_id):
 
     status = torrent.get_stream_status()
     if not status.get("active"):
-        return "No active stream", 404
+        return jsonify(error="No active stream"), 404
 
     file_path = status.get("file_path")
     if not file_path:
-        return "File not found", 404
+        return jsonify(error="File not found"), 404
 
     # Retry loop — file may take time to appear on disk after buffer target
     import time
@@ -150,9 +150,9 @@ def play_file(session_id):
             else:
                 _log.error("play_file: %s not found after 60s. Contents of %s: %s",
                             file_path, dl_dir, os.listdir(dl_dir) if os.path.isdir(dl_dir) else "dir missing")
-                return f"File not found: {file_path}", 404
+                return jsonify(error="File not found on disk after 60s — torrent may have no seeders"), 404
         else:
-            return f"File not found: {file_path}", 404
+            return jsonify(error="File not found on disk after 60s — torrent may have no seeders"), 404
 
     ext = os.path.splitext(file_path)[1].lower()
 
