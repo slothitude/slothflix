@@ -19,6 +19,7 @@ COPY slothflix/ slothflix/
 COPY frontend/ frontend/
 COPY static/ static/
 COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 # Create data directories
 RUN mkdir -p /app/data /downloads && chown -R slothflix:slothflix /app /downloads
