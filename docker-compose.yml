@@ -3,7 +3,10 @@ services:
     image: traefik:v3
     container_name: traefik
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8888:8888"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /opt/traefik/certs:/certs:ro
@@ -28,7 +31,7 @@ services:
     volumes:
       - downloads:/downloads
     ports:
-      - "9191:9191"      # Transmission RPC
+      - "9191:9191"
     environment:
       - OPENVPN_PROVIDER=PUREVPN
       - OPENVPN_USERNAME=purevpn0s9075328
@@ -105,7 +108,7 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
-    mem_limit: 256m
+    mem_limit: 512m
     environment:
       - WEBUI_AUTH=true
       - ENABLE_SIGNUP=true
