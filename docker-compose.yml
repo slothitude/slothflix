@@ -102,7 +102,48 @@ services:
       - "traefik.http.services.emu.loadbalancer.server.port=3000"
       - "traefik.http.routers.emu.service=emu"
 
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    environment:
+      - WEBUI_AUTH=true
+      - ENABLE_SIGNUP=true
+    volumes:
+      - open-webui-data:/app/backend/data
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.chat.rule=PathPrefix(`/chat`)"
+      - "traefik.http.routers.chat.entrypoints=websecure"
+      - "traefik.http.routers.chat.tls=true"
+      - "traefik.http.services.chat.loadbalancer.server.port=8080"
+      - "traefik.http.routers.chat.service=chat"
+
+  poste:
+    image: analogic/poste.io
+    container_name: poste
+    hostname: mail.slothitude.giize.com
+    environment:
+      - HTTPS=OFF
+      - TZ=Etc/UTC
+    volumes:
+      - poste-data:/data
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mail.rule=PathPrefix(`/mail`)"
+      - "traefik.http.routers.mail.entrypoints=websecure"
+      - "traefik.http.routers.mail.tls=true"
+      - "traefik.http.services.mail.loadbalancer.server.port=80"
+      - "traefik.http.routers.mail.service=mail"
+
 volumes:
   downloads:
   cache-data:
   rom-data:
+  open-webui-data:
+  poste-data:

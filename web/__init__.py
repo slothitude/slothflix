@@ -1,7 +1,9 @@
 """SlothFlix Flask web application."""
 
 import hashlib
+import json
 import os
+import subprocess
 import threading
 from flask import Flask, request, Response, redirect, jsonify, render_template
 from .api import api_bp
@@ -23,7 +25,7 @@ def create_app():
     _auth_pass = os.getenv("AUTH_PASS", "")
 
     # Paths that skip auth
-    _auth_skip = {"/login", "/api/auth/token"}
+    _auth_skip = {"/login", "/api/auth/token", "/chat-login", "/mail-login"}
 
     def _is_authed():
         # 1. Cookie token
@@ -144,6 +146,124 @@ def create_app():
                 f"{auth.username}:{auth.password}".encode()
             ).decode()
         return render_template("index.html", auth_header=auth_header)
+
+    # --- Chat & Mail auto-login helpers ---
+
+    def _get_telegram_user():
+        """Get telegram_user_id and telegram_username from cookie token."""
+        token = request.cookies.get("slothflix_token")
+        if not token:
+            return None
+        import cache
+        row = cache.validate_token(token)
+        if not row:
+            return None
+        return row.get("telegram_user_id"), row.get("telegram_username")
+
+    def _user_password(user_id):
+        """Deterministic password from telegram user ID."""
+        return hashlib.sha256(f"slothflix-{user_id}".encode()).hexdigest()[:16]
+
+    def _docker_ip(container_name):
+        """Get the Docker bridge IP of a container."""
+        result = subprocess.run(
+            ["docker", "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", container_name],
+            capture_output=True, text=True, timeout=5,
+        )
+        ip = result.stdout.strip()
+        if not ip:
+            return None
+        return ip
+
+    # --- Chat (Open WebUI) auto-login ---
+
+    @app.route("/chat-login")
+    def chat_login():
+        user = _get_telegram_user()
+        if not user:
+            return redirect("/login")
+        user_id, username = user
+        email = f"{user_id}@slothflix"
+        password = _user_password(user_id)
+        name = username or f"User {user_id}"
+
+        container_ip = _docker_ip("open-webui")
+        if not container_ip:
+            return redirect("/chat/")
+
+        base = f"http://{container_ip}:8080"
+        import urllib.request
+        import urllib.error
+
+        # Try sign-in first, fallback to sign-up
+        jwt = None
+        for endpoint, payload in [
+            ("/api/v1/auths/signin", {"email": email, "password": password}),
+            ("/api/v1/auths/signup", {"email": email, "password": password, "name": name}),
+        ]:
+            try:
+                req = urllib.request.Request(
+                    f"{base}{endpoint}",
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                resp = urllib.request.urlopen(req, timeout=10)
+                data = json.loads(resp.read())
+                jwt = data.get("token") or data.get("jwt")
+                if jwt:
+                    break
+            except urllib.error.HTTPError:
+                continue
+            except Exception:
+                continue
+
+        resp = redirect("/chat/")
+        if jwt:
+            resp.set_cookie("token", jwt, httponly=False, samesite="Lax", path="/chat/")
+        return resp
+
+    # --- Mail (Poste.io) auto-login ---
+
+    @app.route("/mail-login")
+    def mail_login():
+        user = _get_telegram_user()
+        if not user:
+            return redirect("/login")
+        user_id, username = user
+        domain = "slothitude.giize.com"
+        email = f"{username}@{domain}" if username else f"{user_id}@{domain}"
+        password = _user_password(user_id)
+
+        container_ip = _docker_ip("poste")
+        if not container_ip:
+            return redirect("/mail/")
+
+        base = f"http://{container_ip}"
+        import urllib.request
+        import urllib.error
+
+        # Try to provision the mailbox via Poste admin API (ignore errors if exists)
+        try:
+            admin_payload = {
+                "email": email,
+                "password": password,
+                "name": username or f"User {user_id}",
+            }
+            req = urllib.request.Request(
+                f"{base}/admin/api/mailboxes",
+                data=json.dumps(admin_payload).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+        except Exception:
+            pass
+
+        # Redirect to webmail — poste webmail has its own login form
+        # Use auto-login via hash fragment if supported, otherwise just redirect
+        resp = redirect(f"/mail/webmail/#/login?email={email}")
+        return resp
 
     # Trailer pre-roll: refresh on startup, then daily
     _schedule_trailer_refresh()
