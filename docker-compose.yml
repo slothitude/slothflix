@@ -105,6 +105,7 @@ services:
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
+    mem_limit: 256m
     environment:
       - WEBUI_AUTH=true
       - ENABLE_SIGNUP=true
@@ -123,9 +124,12 @@ services:
     image: analogic/poste.io
     container_name: poste
     hostname: mail.slothitude.giize.com
+    mem_limit: 400m
     environment:
       - HTTPS=OFF
       - TZ=Etc/UTC
+      - DISABLE_CLAMAV=1
+      - DISABLE_RSPAMD=1
     volumes:
       - poste-data:/data
     ports:
