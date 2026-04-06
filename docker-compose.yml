@@ -64,11 +64,11 @@ services:
       - "traefik.http.services.slothflix.loadbalancer.server.port=8180"
       - "traefik.http.routers.slothflix.service=slothflix"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://127.0.0.1:9191 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9191 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
 
   slothflix:
     build: .
