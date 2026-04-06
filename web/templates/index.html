@@ -810,19 +810,18 @@ function stopTrailerPreRoll() {
   if (trailerDoneResolve) { trailerDoneResolve(); trailerDoneResolve = null; }
 }
 
-async function waitForBuffer(sessionId, timeoutMs = 120000) {
+async function waitForBuffer(sessionId) {
   const dlStats = document.getElementById('dlStats');
   const dlProgressWrap = document.getElementById('dlProgressWrap');
   dlStats.style.display = 'flex';
   dlProgressWrap.style.display = 'block';
-  const deadline = Date.now() + timeoutMs;
-  const stallDeadline = Date.now() + 20000; // 20s to detect dead torrents
-  let zeroProgressCount = 0;
+  const noPeerDeadline = Date.now() + 20000;  // 20s to find any peers
+  let lastPct = -1;
+  let lastProgressTime = Date.now();
 
   return new Promise((resolve, reject) => {
     const check = async () => {
       try {
-        if (Date.now() > deadline) { reject(new Error('Buffering timed out')); return; }
         const r = await authFetch(API + '/api/stream/status');
         const d = await r.json();
         if (!d.active) { reject(new Error('Stream ended unexpectedly')); return; }
@@ -831,16 +830,21 @@ async function waitForBuffer(sessionId, timeoutMs = 120000) {
         const pct = d.progress || 0;
         const seeds = d.seeds || 0;
         const peers = d.peers || 0;
+        const speed = d.download_rate || 0;
 
-        // Stalled detection: 0% progress with 0 seeds + 0 peers for 20s
-        if (pct === 0 && seeds === 0 && peers === 0) {
-          zeroProgressCount++;
-          if (Date.now() > stallDeadline) {
-            reject(new Error('No seeders available — this torrent may be dead'));
-            return;
-          }
-        } else {
-          zeroProgressCount = 0;
+        // Dead torrent: 0 seeds + 0 peers after 20s
+        if (seeds === 0 && peers === 0 && Date.now() > noPeerDeadline) {
+          reject(new Error('No seeders available — this torrent may be dead'));
+          return;
+        }
+
+        // Stalled: has peers but no progress for 30s
+        if (pct > lastPct) {
+          lastPct = pct;
+          lastProgressTime = Date.now();
+        } else if (Date.now() - lastProgressTime > 30000) {
+          reject(new Error('Download stalled — no progress for 30s'));
+          return;
         }
 
         // Status text with seeder health
@@ -849,8 +853,10 @@ async function waitForBuffer(sessionId, timeoutMs = 120000) {
           statusText = 'Starting playback...';
         } else if (seeds === 0 && peers === 0) {
           statusText = 'Looking for peers...';
-        } else {
+        } else if (speed > 0) {
           statusText = 'Buffering...';
+        } else {
+          statusText = 'Waiting for data...';
         }
         document.getElementById('playerStatus').textContent = statusText;
 
