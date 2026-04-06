@@ -1,0 +1,23 @@
+:root {
+    --sloth-red: #e50914;
+    --sloth-red-hover: #f6121d;
+    --bg-dark: #141414;
+    --bg-card: #181818;
+    --bg-overlay: rgba(20, 20, 20, 0.85);
+    --text-primary: #fff;
+    --text-secondary: #b3b3b3;
+    --text-muted: #808080;
+    --border-color: #333;
+    --gradient-hero: linear-gradient(to top, #141414, transparent 60%);
+    --gradient-hero-bottom: linear-gradient(to bottom, transparent 60%, #141414);
+    --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-panel: -4px 0 20px rgba(0, 0, 0, 0.7);
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --transition-fast: 150ms ease;
+    --transition-med: 300ms ease;
+    --nav-height: 68px;
+    --panel-width: 600px;
+    --max-content-width: 1400px;
+}

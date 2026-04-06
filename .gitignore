@@ -8,6 +8,3 @@ build/
 dist/
 downloads/
 info/
-static/poster_default.png
-%{http_code}
--5

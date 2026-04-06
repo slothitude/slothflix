@@ -1,0 +1,197 @@
+/* Vimm Library Browser */
+.library-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 40px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.library-bar select,
+.library-bar button {
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid #444;
+    background: #222;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.library-bar select:focus,
+.library-bar button:focus {
+    outline: none;
+    border-color: var(--sloth-red);
+}
+
+.library-bar button {
+    background: var(--sloth-red);
+    border-color: var(--sloth-red);
+    font-weight: 600;
+}
+
+.library-bar button:hover {
+    background: var(--sloth-red-hover);
+}
+
+.library-bar button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* Letter Bar */
+.letter-bar {
+    display: flex;
+    gap: 2px;
+    padding: 0 40px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.letter-bar span {
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background .2s, color .2s;
+}
+
+.letter-bar span:hover {
+    color: #fff;
+    background: var(--border-color);
+}
+
+.letter-bar span.active {
+    color: #fff;
+    background: var(--sloth-red);
+}
+
+.vimm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    padding: 0 40px 40px;
+}
+
+.vimm-card {
+    background: #222;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform .2s, box-shadow .2s;
+    position: relative;
+}
+
+.vimm-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .6);
+}
+
+.vimm-card img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    background: #1a1a2e;
+}
+
+.vimm-card .vimm-title {
+    padding: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vimm-card .vimm-meta {
+    padding: 0 8px 8px;
+    font-size: 10px;
+    color: #888;
+    display: flex;
+    justify-content: space-between;
+}
+
+.vimm-card .vimm-rating {
+    color: #46d369;
+}
+
+.vimm-card .dl-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, .7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vimm-card:hover .dl-overlay {
+    display: flex;
+}
+
+.vimm-card .dl-overlay .btn-sm {
+    padding: 6px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.vimm-card .dl-overlay .btn-dl {
+    background: var(--sloth-red);
+    color: #fff;
+}
+
+.vimm-card .dl-overlay .btn-dl:hover {
+    background: var(--sloth-red-hover);
+}
+
+.vimm-card .dl-overlay .btn-dl:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.vimm-card .dl-overlay .btn-installed {
+    background: #46d369;
+    color: #000;
+}
+
+.lib-loading {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+}
+
+/* Tab Sub */
+.tab-sub {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 40px 0;
+}
+
+.tab-sub-btn {
+    padding: 6px 16px;
+    font-size: 13px;
+    color: #aaa;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: none;
+    transition: background .2s, color .2s;
+}
+
+.tab-sub-btn:hover {
+    color: #fff;
+}
+
+.tab-sub-btn.active {
+    background: var(--sloth-red);
+    color: #fff;
+}

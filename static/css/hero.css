@@ -1,0 +1,60 @@
+/* Hero */
+.hero {
+    height: 70vh;
+    display: flex;
+    align-items: end;
+    padding: 0 40px 60px;
+    background: linear-gradient(0deg, var(--bg-dark) 0%, transparent 50%),
+                linear-gradient(90deg, var(--bg-dark) 60%, transparent),
+                radial-gradient(ellipse at 70% 30%, #1a2a3a 0%, var(--bg-dark) 70%);
+}
+
+.hero-info {
+    max-width: 500px;
+}
+
+.hero-info h1 {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, .8);
+}
+
+.hero-info p {
+    font-size: 16px;
+    color: #aaa;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background .2s;
+}
+
+.btn-play {
+    background: var(--sloth-red);
+    color: #fff;
+}
+
+.btn-play:hover {
+    background: var(--sloth-red-hover);
+}
+
+.btn-queue {
+    background: rgba(109, 109, 110, .7);
+    color: #fff;
+    margin-left: 10px;
+}
+
+.btn-queue:hover {
+    background: rgba(109, 109, 110, .5);
+}

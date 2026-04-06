@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SlothFlix - Login</title>
+    <link rel="icon" href="/static/favicon.ico">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #141414;
+            color: #fff;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .login-box {
+            background: rgba(0,0,0,0.75);
+            padding: 60px 68px 40px;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 450px;
+        }
+        .login-box h1 { font-size: 32px; margin-bottom: 28px; }
+        .login-box input {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 4px;
+            background: #333;
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+        .login-box button {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 4px;
+            background: #e50914;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 24px;
+        }
+        .login-box button:hover { background: #f6121d; }
+        .login-box button:disabled { background: #555; cursor: not-allowed; }
+        .error { color: #e87c03; font-size: 14px; margin-bottom: 16px; display: none; }
+        .login-box p { color: #8c8c8c; margin-top: 16px; font-size: 14px; }
+        .login-box a { color: #fff; text-decoration: none; }
+        .login-box a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>Sign In</h1>
+        <div class="error" id="error"></div>
+        <input type="text" id="token-input" placeholder="Access token" autocomplete="off">
+        <button id="login-btn" onclick="doLogin()">Sign In</button>
+        <p>Need access? Message <a href="https://t.me/SlothFlixBot">@SlothFlixBot</a> on Telegram</p>
+    </div>
+    <script>
+        async function doLogin() {
+            const token = document.getElementById('token-input').value.trim();
+            const btn = document.getElementById('login-btn');
+            const err = document.getElementById('error');
+            if (!token) { err.textContent = 'Enter a token'; err.style.display = 'block'; return; }
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/auth/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    const data = await res.json();
+                    err.textContent = data.detail || 'Invalid token';
+                    err.style.display = 'block';
+                }
+            } catch (e) {
+                err.textContent = 'Connection error';
+                err.style.display = 'block';
+            }
+            btn.disabled = false;
+        }
+        document.getElementById('token-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') doLogin();
+        });
+    </script>
+</body>
+</html>
