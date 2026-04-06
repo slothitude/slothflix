@@ -609,7 +609,7 @@ document.getElementById('videoPlayer').addEventListener('error', function() {
   showPlayerError(msg);
 });
 
-const MAX_RETRIES = 1;
+const MAX_RETRIES = 3;
 
 async function playItem(item, fileId) {
   closeDetail();
@@ -810,7 +810,7 @@ function stopTrailerPreRoll() {
   if (trailerDoneResolve) { trailerDoneResolve(); trailerDoneResolve = null; }
 }
 
-async function waitForBuffer(sessionId, timeoutMs = 30000) {
+async function waitForBuffer(sessionId, timeoutMs = 120000) {
   const dlStats = document.getElementById('dlStats');
   const dlProgressWrap = document.getElementById('dlProgressWrap');
   dlStats.style.display = 'flex';
