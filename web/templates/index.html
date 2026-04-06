@@ -595,6 +595,8 @@ function retryFromError() {
 // Video error handler
 document.getElementById('videoPlayer').addEventListener('error', function() {
   const v = this;
+  // Ignore errors from intentional source clearing
+  if (!v.src || v.src === location.href) return;
   let msg = 'Video failed to load';
   if (v.error) {
     switch (v.error.code) {
