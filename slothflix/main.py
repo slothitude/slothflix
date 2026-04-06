@@ -23,15 +23,21 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Start Telegram bot if configured
+    # Start Telegram bot if configured (non-blocking, errors don't crash app)
     bot_task = None
     if settings.telegram_bot_token:
         import asyncio
 
         from slothflix.bot.bot import run_bot
 
-        bot_task = asyncio.create_task(run_bot())
-        logger.info("Telegram bot started")
+        async def _start_bot():
+            try:
+                await run_bot()
+            except Exception as e:
+                logger.warning(f"Telegram bot failed: {e}")
+
+        bot_task = asyncio.create_task(_start_bot())
+        logger.info("Telegram bot task created")
 
     # Schedule trailer refresh
     try:
