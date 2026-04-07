@@ -2,7 +2,7 @@
 import { h, render } from 'https://esm.sh/preact@10';
 import { useState, useEffect, useRef, useCallback } from 'https://esm.sh/preact@10/hooks';
 import htm from 'https://esm.sh/htm@3';
-import { signal, useSignal } from 'https://esm.sh/@preact/signals';
+import { signal, useSignal } from 'https://esm.sh/@preact/signals@1?deps=preact@10';
 
 import { authFetch } from './api.js';
 import { currentTab, gameSubTab, currentHero, catalogData, installedRoms } from './state.js';
