@@ -257,10 +257,7 @@ async def run_bot():
         logger.warning("TELEGRAM_BOT_TOKEN not set, bot disabled")
         return
 
-    from telegram.request import HTTPXRequest
-
-    request = HTTPXRequest(connect_timeout=30, read_timeout=30)
-    app = ApplicationBuilder().token(token).request(request).build()
+    app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("request", request_cmd))
     app.add_handler(CommandHandler("status", status_cmd))
@@ -274,7 +271,8 @@ async def run_bot():
     await app.initialize()
     logger.info("Telegram bot starting polling...")
     await app.start()
-    await app.updater.start_polling()
+    if app.updater:
+        await app.updater.start_polling()
     logger.info("Telegram bot running")
 
     # Keep running until cancelled
@@ -284,6 +282,13 @@ async def run_bot():
     except asyncio.CancelledError:
         pass
     finally:
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
+        try:
+            if app.updater and app.updater.running:
+                await app.updater.stop()
+        except Exception:
+            pass
+        try:
+            await app.stop()
+            await app.shutdown()
+        except Exception:
+            pass
