@@ -35,7 +35,7 @@ function SplashScreen() {
 
 // --- Nav ---
 function Nav() {
-    const scrolled = useSignal(false);
+    const scrolled = signal(false);
     const searchInput = useRef(null);
 
     useEffect(() => {
@@ -72,7 +72,7 @@ function Nav() {
 // --- Hero ---
 function Hero() {
     const hero = currentHero.value;
-    const blurb = useSignal('');
+    const blurb = signal('');
 
     useEffect(() => {
         if (hero) loadBlurb(hero.title).then(b => blurb.value = b);
@@ -96,8 +96,8 @@ function Hero() {
 function Card({ item }) {
     const cardRef = useRef(null);
     const imgRef = useRef(null);
-    const loaded = useSignal(false);
-    const observed = useSignal(false);
+    const loaded = signal(false);
+    const observed = signal(false);
 
     useEffect(() => {
         const card = cardRef.current;
@@ -150,9 +150,9 @@ function CatalogRow({ title, items }) {
 // --- Detail Panel ---
 function DetailPanel() {
     const item = detailItem.value;
-    const blurb = useSignal('');
-    const files = useSignal([]);
-    const loadingFiles = useSignal(false);
+    const blurb = signal('');
+    const files = signal([]);
+    const loadingFiles = signal(false);
 
     useEffect(() => {
         if (item) {
@@ -435,12 +435,12 @@ const VIMM_TO_SYS = { NES: 'nes', SNES: 'snes', GBA: 'gba', GBC: 'gbc', N64: 'n6
 
 function GamesTab() {
     const sub = gameSubTab.value;
-    const systems = useSignal({});
-    const loading = useSignal(true);
-    const vimmSystem = useSignal('NES');
-    const vimmLetter = useSignal('S');
-    const vimmGames = useSignal([]);
-    const vimmLoading = useSignal(false);
+    const systems = signal({});
+    const loading = signal(true);
+    const vimmSystem = signal('NES');
+    const vimmLetter = signal('S');
+    const vimmGames = signal([]);
+    const vimmLoading = signal(false);
 
     const loadRoms = async () => {
         loading.value = true;
@@ -562,8 +562,8 @@ function VimmCard({ game, vimmSystem, installed }) {
 
 // --- Search Results ---
 function SearchResults({ query }) {
-    const results = useSignal([]);
-    const loading = useSignal(true);
+    const results = signal([]);
+    const loading = signal(true);
 
     useEffect(() => {
         if (!query) return;
